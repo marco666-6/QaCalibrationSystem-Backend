@@ -1,54 +1,92 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity.Data;
 using Microsoft.AspNetCore.Mvc;
 using Project.Application.Common;
 using Project.Application.DTOs;
 using Project.Application.Interfaces;
+using System.Security.Claims;
 
 namespace Project.Api.Controllers;
 
+
 [ApiController]
-[Route("api/auth")]
+[Route("api/[controller]")]
 [Produces("application/json")]
 public sealed class AuthController : ControllerBase
 {
     private readonly IAuthService _authService;
+    private readonly ILogger<AuthController> _logger;
 
-    public AuthController(IAuthService authService)
+    public AuthController(
+        IAuthService authService,
+        ILogger<AuthController> logger)
     {
         _authService = authService;
+        _logger = logger;
     }
+
 
     [HttpPost("login")]
     [AllowAnonymous]
-    public async Task<IActionResult> Login([FromBody] LoginRequest request)
+    [ProducesResponseType(typeof(ApiResponse<LoginResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<LoginResponse>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<LoginResponse>), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> Login([FromBody] LogInRequest request)
     {
         var result = await _authService.LoginAsync(request);
-        return result.Success ? Ok(result) : Unauthorized(result);
+
+        if (!result.Success)
+        {
+            return Unauthorized(result);
+        }
+
+        return Ok(result);
     }
 
-    [HttpPost("register-employee")]
+    [HttpPost("register")]
     [AllowAnonymous]
-    public async Task<IActionResult> RegisterEmployee([FromBody] RegisterEmployeeRequest request)
+    [ProducesResponseType(typeof(ApiResponse<LoginResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<LoginResponse>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<LoginResponse>), StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Register([FromBody] RegRequest request)
     {
-        var result = await _authService.RegisterEmployeeAsync(request);
-        return result.Success ? Ok(result) : BadRequest(result);
+        var result = await _authService.RegisterAsync(request);
+
+        if (!result.Success)
+        {
+            if (result.Message.Contains("already", StringComparison.OrdinalIgnoreCase))
+                return Conflict(result);
+
+            return BadRequest(result);
+        }
+
+        return Ok(result);
     }
 
-    [HttpPost("change-password")]
-    [Authorize]
-    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
+    [HttpGet("employee-by-code/{code}")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(ApiResponse<EmployeeByCodeDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<EmployeeByCodeDto>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<EmployeeByCodeDto>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetEmployeeByCode([FromRoute] string code)
     {
-        if (!TryGetUserId(out var userId))
-            return Unauthorized(ApiResponse.Fail("Invalid token."));
+        var result = await _authService.GetEmployeeByCodeAsync(code);
+        if (!result.Success)
+        {
+            if (result.Message.Contains("not found", StringComparison.OrdinalIgnoreCase))
+                return NotFound(result);
 
-        var result = await _authService.ChangePasswordAsync(userId, request);
-        return result.Success ? Ok(result) : BadRequest(result);
+            return BadRequest(result);
+        }
+
+        return Ok(result);
     }
 
     [HttpPost("forgot-password")]
     [AllowAnonymous]
-    public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request)
+    [ProducesResponseType(typeof(ApiResponse<ForgotPasswordResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<ForgotPasswordResponse>), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> ForgotPassword([FromBody] ForgotPassRequest request)
     {
         var result = await _authService.ForgotPasswordAsync(request);
         return result.Success ? Ok(result) : BadRequest(result);
@@ -56,20 +94,46 @@ public sealed class AuthController : ControllerBase
 
     [HttpPost("reset-password")]
     [AllowAnonymous]
-    public async Task<IActionResult> ResetPassword([FromBody] ConfirmResetPasswordRequest request)
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordWithTokenRequest request)
     {
-        var result = await _authService.ConfirmResetPasswordAsync(request);
+        var result = await _authService.ResetPasswordAsync(request);
         return result.Success ? Ok(result) : BadRequest(result);
     }
 
-    [HttpPost("refresh")]
-    [AllowAnonymous]
-    public async Task<IActionResult> Refresh([FromBody] RefreshTokenRequest request)
+
+    [HttpPost("change-password")]
+    [Authorize]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
     {
-        var result = await _authService.RefreshTokenAsync(request);
-        return result.Success ? Ok(result) : Unauthorized(result);
+
+        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out var userId))
+            return Unauthorized(ApiResponse.Fail("Invalid token."));
+
+        var result = await _authService.ChangePasswordAsync(userId, request);
+
+        return result.Success ? Ok(result) : BadRequest(result);
     }
 
-    private bool TryGetUserId(out long userId)
-        => long.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out userId);
+
+    [HttpPost("refresh")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(ApiResponse<RefreshTokenResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<RefreshTokenResponse>), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenRequest request)
+    {
+        var result = await _authService.RefreshTokenAsync(request);
+
+        if (!result.Success)
+        {
+            return Unauthorized(result);
+        }
+
+        return Ok(result);
+    }
 }

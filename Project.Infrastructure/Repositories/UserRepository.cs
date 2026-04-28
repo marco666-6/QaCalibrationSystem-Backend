@@ -6,8 +6,14 @@ using Project.Infrastructure.Data;
 
 namespace Project.Infrastructure.Repositories;
 
+/// <inheritdoc cref="IUserRepository"/>
 public sealed class UserRepository : BaseRepository<User>, IUserRepository
 {
+    public UserRepository(IDbConnectionFactory connectionFactory)
+        : base(connectionFactory) { }
+
+
+
     private const string BaseSelect = """
         SELECT
             u.user_id,
@@ -17,50 +23,92 @@ public sealed class UserRepository : BaseRepository<User>, IUserRepository
             u.email,
             u.role,
             u.is_active,
-            u.failed_login_attempts,
-            u.must_change_password,
             u.last_login,
+            u.failed_login_attempts,
             u.lockout_until,
+            u.must_change_password,
             u.refresh_token,
             u.refresh_token_expires_at,
             u.created_at,
             u.updated_at,
-            e.employee_id AS EmpId,
-            e.employee_id,
-            e.employee_code,
-            e.full_name,
-            e.email,
-            COALESCE(s.section_id, 0) AS section_id,
-            p.position_id,
-            e.manager_id,
-            CAST('Active' AS nvarchar(50)) AS employment_status,
-            e.profile_photo_url,
-            e.is_active,
-            e.created_at,
-            e.updated_at
-        FROM dbo.users u
+            e.employee_id   AS EmpId,
+            e.full_name    AS FullName,
+            e.employee_code AS EmployeeCode
+        FROM users u
         LEFT JOIN Shared.dbo.employees e ON e.employee_id = u.employee_id
-        LEFT JOIN dbo.sections s ON s.section_code = e.section_cd
-        LEFT JOIN dbo.positions p ON p.position_code = e.position_cd
         """;
 
-    public UserRepository(IDbConnectionFactory connectionFactory)
-        : base(connectionFactory)
-    {
-    }
 
     public async Task<User?> GetByUsernameAsync(string username)
     {
-        var sql = $"{BaseSelect} WHERE u.username = @Username OR e.employee_code = @Username";
+        var sql = $"{BaseSelect} WHERE u.username = @Username";
         var results = await QueryWithEmployeeAsync(sql, new { Username = username });
         return results.SingleOrDefault();
     }
 
-    public async Task<User?> GetByIdAsync(long userId)
+    public async Task<User?> GetByEmailAsync(string email)
     {
-        var sql = $"{BaseSelect} WHERE u.user_id = @UserId";
-        var results = await QueryWithEmployeeAsync(sql, new { UserId = userId });
+        var sql = $"{BaseSelect} WHERE u.email = @Email";
+        var results = await QueryWithEmployeeAsync(sql, new { Email = email.ToLowerInvariant() });
         return results.SingleOrDefault();
+    }
+
+    public async Task UpdateLastLoginAsync(int userId)
+    {
+        const string sql = """
+            UPDATE users
+            SET last_login = @Now
+            WHERE user_id = @UserId
+            """;
+
+        await ExecuteAsync(sql, new { UserId = userId, Now = DateTime.UtcNow });
+    }
+
+    public async Task IncrementFailedLoginAttemptsAsync(int userId)
+    {
+        const string sql = """
+            UPDATE users
+            SET failed_login_attempts = failed_login_attempts + 1
+            WHERE user_id = @UserId
+            """;
+
+        await ExecuteAsync(sql, new { UserId = userId });
+    }
+
+    public async Task ResetFailedLoginAttemptsAsync(int userId)
+    {
+        const string sql = """
+            UPDATE users
+            SET failed_login_attempts = 0,
+                lockout_until = NULL
+            WHERE user_id = @UserId
+            """;
+
+        await ExecuteAsync(sql, new { UserId = userId });
+    }
+
+    public async Task LockAccountAsync(int userId, DateTime lockoutUntil)
+    {
+        const string sql = """
+            UPDATE users
+            SET failed_login_attempts = 0,
+                lockout_until = @LockoutUntil
+            WHERE user_id = @UserId
+            """;
+
+        await ExecuteAsync(sql, new { UserId = userId, LockoutUntil = lockoutUntil });
+    }
+
+    public async Task StoreRefreshTokenAsync(int userId, string refreshToken, DateTime expiresAt)
+    {
+        const string sql = """
+            UPDATE users
+            SET refresh_token = @RefreshToken,
+                refresh_token_expires_at = @ExpiresAt
+            WHERE user_id = @UserId
+            """;
+
+        await ExecuteAsync(sql, new { UserId = userId, RefreshToken = refreshToken, ExpiresAt = expiresAt });
     }
 
     public async Task<User?> GetByRefreshTokenAsync(string refreshToken)
@@ -70,124 +118,164 @@ public sealed class UserRepository : BaseRepository<User>, IUserRepository
         return results.SingleOrDefault();
     }
 
-    public async Task<Employee?> GetSharedEmployeeByCodeAsync(string employeeCode)
+    public async Task<EmployeeByCodeDto?> GetEmployeeByCodeAsync(string code)
     {
         const string sql = """
             SELECT TOP 1
-                CAST(0 AS bigint) AS employee_id,
-                v.nik AS employee_code,
-                TRIM(v.Name) AS full_name,
-                CAST(NULL AS nvarchar(200)) AS email,
-                TRY_CONVERT(date, v.dateofbirth) AS date_of_birth,
-                v.sex AS gender,
-                COALESCE(s.section_id, 0) AS section_id,
-                p.position_id,
-                CAST(NULL AS bigint) AS manager_id,
-                CAST('Active' AS nvarchar(50)) AS employment_status,
-                CAST(NULL AS nvarchar(500)) AS profile_photo_url,
-                CAST(1 AS bit) AS is_active,
-                sysutcdatetime() AS created_at,
-                CAST(NULL AS datetime2) AS updated_at
-            FROM Shared.dbo.View_emp_mst v
-            LEFT JOIN dbo.sections s ON s.section_code = v.section
-            LEFT JOIN dbo.positions p ON p.position_code = v.position_cd
-            WHERE v.nik = @EmployeeCode
+                e.name AS FullName,
+                e.nik AS Code
+            FROM Shared.dbo.View_emp_mst e
+            WHERE e.nik = @Code;
             """;
 
-        using var connection = CreateConnection();
-        return await connection.QuerySingleOrDefaultAsync<Employee>(sql, new { EmployeeCode = employeeCode });
+        using var connection = _connectionFactory.CreateConnection();
+        return await connection.QuerySingleOrDefaultAsync<EmployeeByCodeDto>(sql, new { Code = code });
     }
 
-    public async Task<long?> UpsertSharedEmployeeAsync(string employeeCode, string? email)
+    public async Task<int?> UpsertEmployeeIdFromNikAsync(string employeeCode, string email)
     {
-        const string sql = """
+        const string upsertEmployeeSql = """
             MERGE INTO Shared.dbo.employees AS target
             USING (
                 SELECT
-                    src.nik AS employee_code,
-                    TRIM(src.Name) AS full_name,
-                    TRY_CONVERT(date, src.dateofbirth) AS date_of_birth,
-                    src.sex AS gender,
-                    src.section AS section_cd,
-                    src.position_cd AS position_cd,
-                    CAST(1 AS bit) AS is_active
-                FROM Shared.dbo.View_emp_mst src
-                WHERE src.nik = @EmployeeCode
+                    nik as employee_code,
+                    TRIM(name) as full_name,
+                    CONVERT(DATE,dateofbirth) as date_of_birth,
+                    sex as gender,
+                    section as section_cd,
+                    position_c as position_cd,
+                    1 as is_active
+                FROM Shared.dbo.View_emp_mst
+                WHERE nik = @EmployeeCode
             ) AS source
             ON target.employee_code = source.employee_code
             WHEN NOT MATCHED THEN
                 INSERT (
-                    employee_code,
-                    full_name,
-                    email,
-                    date_of_birth,
-                    gender,
-                    section_cd,
-                    position_cd,
-                    is_active,
-                    created_at
+                    employee_code, full_name,
+                    date_of_birth, gender, section_cd, position_cd,email,
+                    is_active, created_at
                 )
                 VALUES (
-                    source.employee_code,
-                    source.full_name,
-                    @Email,
-                    source.date_of_birth,
-                    source.gender,
-                    source.section_cd,
-                    source.position_cd,
-                    source.is_active,
-                    sysutcdatetime()
-                )
-            WHEN MATCHED AND (@Email IS NOT NULL AND (target.email IS NULL OR LTRIM(RTRIM(target.email)) = '')) THEN
-                UPDATE SET
-                    email = @Email,
-                    updated_at = sysutcdatetime()
-            OUTPUT inserted.employee_id;
+                    source.employee_code, source.full_name,
+                    source.date_of_birth, source.gender, source.section_cd, source.position_cd,@email,
+                    source.is_active, @CreatedAt
+                );
+
+            SELECT employee_id
+            FROM Shared.dbo.employees
+            WHERE employee_code = @EmployeeCode;
             """;
 
-        using var connection = CreateConnection();
-        var employeeId = await connection.QueryFirstOrDefaultAsync<long?>(sql, new
-        {
-            EmployeeCode = employeeCode,
-            Email = string.IsNullOrWhiteSpace(email) ? null : email.Trim().ToLowerInvariant()
-        });
-
-        if (employeeId.HasValue)
-            return employeeId.Value;
-
-        return await connection.ExecuteScalarAsync<long?>(
-            "SELECT employee_id FROM Shared.dbo.employees WHERE employee_code = @EmployeeCode",
-            new { EmployeeCode = employeeCode });
+        using var connection = _connectionFactory.CreateConnection();
+        return await connection.ExecuteScalarAsync<int?>(
+            upsertEmployeeSql,
+            new { EmployeeCode = employeeCode, CreatedAt = DateTime.UtcNow, Email = email });
     }
+
+    public async Task CreatePasswordResetTokenAsync(PasswordResetToken token)
+    {
+        const string sql = """
+            INSERT INTO password_reset_tokens (
+                user_id,
+                token,
+                expires_at,
+                created_at,
+                consumed_at
+            ) VALUES (
+                @UserId,
+                @Token,
+                @ExpiresAt,
+                @CreatedAt,
+                @ConsumedAt
+            );
+            """;
+
+        await ExecuteAsync(sql, new
+        {
+            token.UserId,
+            token.Token,
+            token.ExpiresAt,
+            token.CreatedAt,
+            token.ConsumedAt
+        });
+    }
+
+    public async Task<PasswordResetToken?> GetValidPasswordResetTokenAsync(string token)
+    {
+        const string sql = """
+            SELECT TOP 1
+                id,
+                user_id,
+                token,
+                expires_at,
+                created_at,
+                consumed_at
+            FROM password_reset_tokens
+            WHERE token = @Token
+              AND consumed_at IS NULL
+              AND expires_at > @Now
+            ORDER BY id DESC
+            """;
+
+        using var connection = _connectionFactory.CreateConnection();
+        return await connection.QuerySingleOrDefaultAsync<PasswordResetToken>(sql, new
+        {
+            Token = token,
+            Now = DateTime.UtcNow
+        });
+    }
+
+    public async Task InvalidatePasswordResetTokensAsync(int userId)
+    {
+        const string sql = """
+            UPDATE password_reset_tokens
+            SET consumed_at = @Now
+            WHERE user_id = @UserId
+              AND consumed_at IS NULL
+            """;
+
+        await ExecuteAsync(sql, new
+        {
+            UserId = userId,
+            Now = DateTime.UtcNow
+        });
+    }
+
+    public async Task ConsumePasswordResetTokenAsync(long id, DateTime consumedAt)
+    {
+        const string sql = """
+            UPDATE password_reset_tokens
+            SET consumed_at = @ConsumedAt
+            WHERE id = @Id
+            """;
+
+        await ExecuteAsync(sql, new
+        {
+            Id = id,
+            ConsumedAt = consumedAt
+        });
+    }
+
+
 
     public async Task<(IEnumerable<User> Items, int TotalCount)> GetAllAsync(UserFilterParams filters)
     {
         var where = new List<string>();
         var parameters = new DynamicParameters();
 
-        if (!string.IsNullOrWhiteSpace(filters.Search))
+        if (!string.IsNullOrWhiteSpace(filters.Name))
         {
-            where.Add("(u.username LIKE @Search OR u.email LIKE @Search OR u.role LIKE @Search OR e.employee_code LIKE @Search OR e.full_name LIKE @Search)");
-            parameters.Add("Search", $"%{filters.Search.Trim()}%");
+            where.Add("(u.username LIKE @Name OR e.full_name LIKE @Name)");
+            parameters.Add("Name", $"%{filters.Name.Trim()}%");
         }
 
-        if (!string.IsNullOrWhiteSpace(filters.Role))
-        {
-            where.Add("u.role = @Role");
-            parameters.Add("Role", filters.Role.Trim());
-        }
-
-        if (filters.IsActive.HasValue)
-        {
-            where.Add("u.is_active = @IsActive");
-            parameters.Add("IsActive", filters.IsActive.Value);
-        }
-
-        var whereClause = where.Count == 0 ? string.Empty : $" WHERE {string.Join(" AND ", where)}";
+        var whereClause = where.Count == 0
+            ? string.Empty
+            : $" WHERE {string.Join(" AND ", where)}";
 
         var countSql = $"""
             SELECT COUNT(*)
-            FROM dbo.users u
+            FROM users u
             LEFT JOIN Shared.dbo.employees e ON e.employee_id = u.employee_id
             {whereClause}
             """;
@@ -195,14 +283,14 @@ public sealed class UserRepository : BaseRepository<User>, IUserRepository
         var dataSql = $"""
             {BaseSelect}
             {whereClause}
-            ORDER BY u.user_id DESC
+            ORDER BY u.username
             OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY
             """;
 
         parameters.Add("Offset", filters.Offset);
         parameters.Add("PageSize", filters.PageSize);
 
-        using var connection = CreateConnection();
+        using var connection = _connectionFactory.CreateConnection();
         var totalCount = await connection.ExecuteScalarAsync<int>(countSql, parameters);
         if (totalCount == 0)
             return ([], 0);
@@ -213,279 +301,211 @@ public sealed class UserRepository : BaseRepository<User>, IUserRepository
 
     public async Task<IEnumerable<User>> GetOptionsAsync(UserOptionFilterParams filters)
     {
-        var where = new List<string> { "u.is_active = 1" };
+        var where = new List<string>();
         var parameters = new DynamicParameters();
 
-        if (!string.IsNullOrWhiteSpace(filters.Search))
+        if (!string.IsNullOrWhiteSpace(filters.Name))
         {
-            where.Add("(u.username LIKE @Search OR u.email LIKE @Search OR u.role LIKE @Search OR e.employee_code LIKE @Search OR e.full_name LIKE @Search)");
-            parameters.Add("Search", $"%{filters.Search.Trim()}%");
+            where.Add("(u.username LIKE @Name OR e.full_name LIKE @Name)");
+            parameters.Add("Name", $"%{filters.Name.Trim()}%");
         }
 
+        var whereClause = where.Count == 0
+            ? string.Empty
+            : $" WHERE {string.Join(" AND ", where)}";
+
         var sql = $"""
-            {BaseSelect}
-            WHERE {string.Join(" AND ", where)}
+            SELECT TOP (@Top)
+                u.user_id,
+                u.employee_id,
+                u.username,
+                u.password_hash,
+                u.email,
+                u.role,
+                u.is_active,
+                u.last_login,
+                u.failed_login_attempts,
+                u.lockout_until,
+                u.must_change_password,
+                u.refresh_token,
+                u.refresh_token_expires_at,
+                u.created_at,
+                u.updated_at,
+                e.employee_id AS EmpId,
+                e.full_name AS FullName
+            FROM users u
+            LEFT JOIN Shared.dbo.employees e ON e.employee_id = u.employee_id
+            {whereClause}
             ORDER BY u.username
-            OFFSET 0 ROWS FETCH NEXT @Top ROWS ONLY
             """;
 
         parameters.Add("Top", filters.Top);
         return await QueryWithEmployeeAsync(sql, parameters);
     }
 
-    public async Task<bool> UsernameExistsAsync(string username, long? excludeUserId = null)
+    public async Task<User?> GetByIdAsync(int userId)
+    {
+        var sql = $"{BaseSelect} WHERE u.user_id = @UserId";
+        var results = await QueryWithEmployeeAsync(sql, new { UserId = userId });
+        return results.SingleOrDefault();
+    }
+
+    public async Task<bool> UsernameExistsAsync(string username, int? excludeUserId = null)
     {
         const string sql = """
-            SELECT COUNT(1)
-            FROM dbo.users
+            SELECT COUNT(1) FROM users
             WHERE username = @Username
               AND (@ExcludeUserId IS NULL OR user_id <> @ExcludeUserId)
             """;
 
-        using var connection = CreateConnection();
-        return await connection.ExecuteScalarAsync<int>(sql, new { Username = username, ExcludeUserId = excludeUserId }) > 0;
+        using var connection = _connectionFactory.CreateConnection();
+        var count = await connection.ExecuteScalarAsync<int>(sql,
+            new { Username = username, ExcludeUserId = excludeUserId });
+
+        return count > 0;
     }
 
-    public async Task<bool> EmailExistsAsync(string email, long? excludeUserId = null)
+    public async Task<bool> EmailExistsAsync(string email, int? excludeUserId = null)
     {
         const string sql = """
-            SELECT COUNT(1)
-            FROM dbo.users
+            SELECT COUNT(1) FROM users
             WHERE email = @Email
               AND (@ExcludeUserId IS NULL OR user_id <> @ExcludeUserId)
             """;
 
-        using var connection = CreateConnection();
-        return await connection.ExecuteScalarAsync<int>(sql, new { Email = email, ExcludeUserId = excludeUserId }) > 0;
+        using var connection = _connectionFactory.CreateConnection();
+        var count = await connection.ExecuteScalarAsync<int>(sql,
+            new { Email = email.ToLowerInvariant(), ExcludeUserId = excludeUserId });
+
+        return count > 0;
     }
 
-    public async Task<bool> EmployeeAlreadyAssignedAsync(long employeeId, long? excludeUserId = null)
-    {
-        const string sql = """
-            SELECT COUNT(1)
-            FROM dbo.users
-            WHERE employee_id = @EmployeeId
-              AND (@ExcludeUserId IS NULL OR user_id <> @ExcludeUserId)
-            """;
 
-        using var connection = CreateConnection();
-        return await connection.ExecuteScalarAsync<int>(sql, new { EmployeeId = employeeId, ExcludeUserId = excludeUserId }) > 0;
-    }
-
-    public async Task<long> CreateAsync(User user)
+    public async Task<int> CreateAsync(User user)
     {
-        const string sql = """
-            INSERT INTO dbo.users (
-                employee_id,
-                username,
-                password_hash,
-                email,
-                role,
-                is_active,
-                failed_login_attempts,
-                must_change_password,
-                last_login,
-                lockout_until,
-                refresh_token,
-                refresh_token_expires_at,
-                created_at,
-                updated_at
-            )
-            VALUES (
-                @EmployeeId,
-                @Username,
-                @PasswordHash,
-                @Email,
-                @Role,
-                @IsActive,
-                @FailedLoginAttempts,
-                @MustChangePassword,
-                @LastLogin,
-                @LockoutUntil,
-                @RefreshToken,
-                @RefreshTokenExpiresAt,
-                @CreatedAt,
-                @UpdatedAt
+        const string insertUserSql = """
+            INSERT INTO users (
+                employee_id, username, password_hash, email, role,
+                is_active, must_change_password, created_at
+            ) VALUES (
+                @EmployeeId, @Username, @PasswordHash, @Email, @Role,
+                @IsActive, @MustChangePassword, @CreatedAt
             );
-
-            SELECT CAST(SCOPE_IDENTITY() AS bigint);
+            SELECT CAST(SCOPE_IDENTITY() AS INT);
             """;
 
-        long? employeeId = user.EmployeeId;
-        if (!employeeId.HasValue && !string.IsNullOrWhiteSpace(user.EmployeeCode))
+        int? employeeId = null;
+
+        if (!string.IsNullOrWhiteSpace(user.EmployeeCode))
         {
-            employeeId = await UpsertSharedEmployeeAsync(user.EmployeeCode, user.Email);
-            if (!employeeId.HasValue || employeeId.Value <= 0)
-                throw new InvalidOperationException($"Employee with code '{user.EmployeeCode}' was not found in Shared.dbo.View_emp_mst.");
+            employeeId = await UpsertEmployeeIdFromNikAsync(user.EmployeeCode, user.Email);
+            if (employeeId is null or 0)
+                throw new InvalidOperationException(
+                    $"Employee with code '{user.EmployeeCode}' was not found in View_emp_mst.");
+        }
+        else if (user.EmployeeId.HasValue)
+        {
+            employeeId = user.EmployeeId;
         }
 
-        using var connection = CreateConnection();
-        return await connection.ExecuteScalarAsync<long>(sql, new
-        {
-            EmployeeId = employeeId,
-            user.Username,
-            user.PasswordHash,
-            user.Email,
-            user.Role,
-            user.IsActive,
-            user.FailedLoginAttempts,
-            user.MustChangePassword,
-            user.LastLogin,
-            user.LockoutUntil,
-            user.RefreshToken,
-            user.RefreshTokenExpiresAt,
-            user.CreatedAt,
-            user.UpdatedAt
-        });
+        using var connection = _connectionFactory.CreateConnection();
+        return await connection.ExecuteScalarAsync<int>(
+            insertUserSql,
+            new
+            {
+                EmployeeId = employeeId,
+                user.Username,
+                user.PasswordHash,
+                user.Email,
+                user.Role,
+                user.IsActive,
+                user.MustChangePassword,
+                user.CreatedAt
+            });
     }
 
     public async Task<bool> UpdateAsync(User user)
     {
         const string sql = """
-            UPDATE dbo.users
-            SET employee_id = @EmployeeId,
-                username = @Username,
-                email = @Email,
-                role = @Role,
-                is_active = @IsActive,
+            UPDATE users SET
+                employee_id         = @EmployeeId,
+                username            = @Username,
+                email               = @Email,
+                role                = @Role,
+                is_active           = @IsActive,
                 must_change_password = @MustChangePassword,
-                updated_at = @UpdatedAt
+                updated_at          = @UpdatedAt
             WHERE user_id = @UserId
             """;
 
-        using var connection = CreateConnection();
-        return await connection.ExecuteAsync(sql, user) > 0;
+        var affected = await ExecuteAsync(sql, new
+        {
+            user.EmployeeId,
+            user.Username,
+            user.Email,
+            user.Role,
+            user.IsActive,
+            user.MustChangePassword,
+            user.UpdatedAt,
+            user.UserId
+        });
+
+        return affected > 0;
     }
 
-    public async Task<bool> UpdatePasswordAsync(long userId, string newPasswordHash, bool mustChangePassword)
+    public async Task<bool> UpdatePasswordAsync(int userId, string newPasswordHash)
     {
         const string sql = """
-            UPDATE dbo.users
-            SET password_hash = @PasswordHash,
-                must_change_password = @MustChangePassword,
-                updated_at = @UpdatedAt
+            UPDATE users SET
+                password_hash        = @PasswordHash,
+                must_change_password = 0,
+                updated_at           = @UpdatedAt
             WHERE user_id = @UserId
             """;
 
-        using var connection = CreateConnection();
-        return await connection.ExecuteAsync(sql, new
+        var affected = await ExecuteAsync(sql, new
         {
             UserId = userId,
             PasswordHash = newPasswordHash,
-            MustChangePassword = mustChangePassword,
             UpdatedAt = DateTime.UtcNow
-        }) > 0;
+        });
+
+        return affected > 0;
     }
 
-    public async Task<bool> SoftDeleteAsync(long userId)
+    public async Task<bool> SoftDeleteAsync(int userId)
     {
         const string sql = """
-            UPDATE dbo.users
+            UPDATE users
             SET is_active = 0,
                 updated_at = @UpdatedAt
             WHERE user_id = @UserId
             """;
 
-        using var connection = CreateConnection();
-        return await connection.ExecuteAsync(sql, new { UserId = userId, UpdatedAt = DateTime.UtcNow }) > 0;
+        var affected = await ExecuteAsync(sql, new
+        {
+            UserId = userId,
+            UpdatedAt = DateTime.UtcNow
+        });
+
+        return affected > 0;
     }
 
-    public async Task<User?> GetByUsernameOrEmailAsync(string usernameOrEmail)
+
+
+    private async Task<IEnumerable<User>> QueryWithEmployeeAsync(
+        string sql, object? param = null)
     {
-        var sql = $"{BaseSelect} WHERE u.username = @UsernameOrEmail OR u.email = @UsernameOrEmail";
-        var results = await QueryWithEmployeeAsync(sql, new { UsernameOrEmail = usernameOrEmail });
-        return results.SingleOrDefault();
-    }
+        using var connection = _connectionFactory.CreateConnection();
 
-    public async Task<PasswordResetToken?> GetPasswordResetTokenAsync(string token)
-    {
-        const string sql = """
-            SELECT id, user_id, token, expires_at, created_at, consumed_at
-            FROM dbo.password_reset_tokens
-            WHERE token = @Token
-            """;
-
-        using var connection = CreateConnection();
-        return await connection.QuerySingleOrDefaultAsync<PasswordResetToken>(sql, new { Token = token });
-    }
-
-    public async Task<long> CreatePasswordResetTokenAsync(long userId, string token, DateTime expiresAt)
-    {
-        const string sql = """
-            INSERT INTO dbo.password_reset_tokens (user_id, token, expires_at, created_at, consumed_at)
-            VALUES (@UserId, @Token, @ExpiresAt, sysutcdatetime(), NULL);
-            SELECT CAST(SCOPE_IDENTITY() AS bigint);
-            """;
-
-        using var connection = CreateConnection();
-        return await connection.ExecuteScalarAsync<long>(sql, new { UserId = userId, Token = token, ExpiresAt = expiresAt });
-    }
-
-    public async Task InvalidatePasswordResetTokensAsync(long userId)
-    {
-        const string sql = """
-            UPDATE dbo.password_reset_tokens
-            SET consumed_at = COALESCE(consumed_at, sysutcdatetime())
-            WHERE user_id = @UserId
-              AND consumed_at IS NULL
-            """;
-
-        using var connection = CreateConnection();
-        await connection.ExecuteAsync(sql, new { UserId = userId });
-    }
-
-    public async Task ConsumePasswordResetTokenAsync(long passwordResetTokenId, DateTime consumedAt)
-    {
-        const string sql = """
-            UPDATE dbo.password_reset_tokens
-            SET consumed_at = @ConsumedAt
-            WHERE id = @PasswordResetTokenId
-            """;
-
-        using var connection = CreateConnection();
-        await connection.ExecuteAsync(sql, new { PasswordResetTokenId = passwordResetTokenId, ConsumedAt = consumedAt });
-    }
-
-    public Task UpdateLastLoginAsync(long userId) => ExecuteSimpleAsync(
-        "UPDATE dbo.users SET last_login = @Now WHERE user_id = @UserId",
-        new { UserId = userId, Now = DateTime.UtcNow });
-
-    public Task IncrementFailedLoginAttemptsAsync(long userId) => ExecuteSimpleAsync(
-        "UPDATE dbo.users SET failed_login_attempts = failed_login_attempts + 1 WHERE user_id = @UserId",
-        new { UserId = userId });
-
-    public Task ResetFailedLoginAttemptsAsync(long userId) => ExecuteSimpleAsync(
-        "UPDATE dbo.users SET failed_login_attempts = 0, lockout_until = NULL WHERE user_id = @UserId",
-        new { UserId = userId });
-
-    public Task LockAccountAsync(long userId, DateTime lockoutUntil) => ExecuteSimpleAsync(
-        "UPDATE dbo.users SET failed_login_attempts = 0, lockout_until = @LockoutUntil WHERE user_id = @UserId",
-        new { UserId = userId, LockoutUntil = lockoutUntil });
-
-    public Task StoreRefreshTokenAsync(long userId, string refreshToken, DateTime expiresAt) => ExecuteSimpleAsync(
-        "UPDATE dbo.users SET refresh_token = @RefreshToken, refresh_token_expires_at = @ExpiresAt WHERE user_id = @UserId",
-        new { UserId = userId, RefreshToken = refreshToken, ExpiresAt = expiresAt });
-
-    private async Task ExecuteSimpleAsync(string sql, object param)
-    {
-        using var connection = CreateConnection();
-        await connection.ExecuteAsync(sql, param);
-    }
-
-    private async Task<IEnumerable<User>> QueryWithEmployeeAsync(string sql, object? param = null)
-    {
-        using var connection = CreateConnection();
-        var items = await connection.QueryAsync<User, Employee?, User>(
+        return await connection.QueryAsync<User, Employee?, User>(
             sql,
             (user, employee) =>
             {
                 user.Employee = employee;
-                user.EmployeeCode = employee?.EmployeeCode;
                 return user;
             },
             param,
             splitOn: "EmpId");
-
-        return items;
     }
 }

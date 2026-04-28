@@ -1,66 +1,216 @@
 using FluentValidation;
+
 using Project.Application.Common;
 
 namespace Project.Application.DTOs;
 
-public sealed record LoginRequest(string Username, string Password);
+public sealed record LogInRequest(
+    string Username,
+    string Password
+);
 
-public sealed record RegisterEmployeeRequest(
+public sealed record RegRequest(
     string EmployeeCode,
     string Username,
     string Email,
     string Password,
-    string ConfirmPassword);
+    string ConfirmPassword
+);
 
-public sealed record EmployeeIdentityDto(
-    long EmployeeId,
-    string EmployeeCode,
-    string FullName,
-    string? Email);
 
 public sealed record LoginResponse(
     string Token,
     DateTime ExpiresAt,
     string RefreshToken,
     DateTime RefreshTokenExpiresAt,
-    long UserId,
-    long? EmployeeId,
+    int UserId,
+    string Username,
+    string Email,
+    string Role,
+    bool MustChangePassword
+);
+
+
+public sealed record ChangePasswordRequest(
+    string CurrentPassword,
+    string NewPassword,
+    string ConfirmNewPassword
+);
+
+public sealed record ForgotPassRequest(
+    string Email
+);
+
+public sealed record ForgotPasswordResponse(
+    string? ResetUrl
+);
+
+public sealed record ResetPasswordWithTokenRequest(
+    string Token,
+    string Email,
+    string NewPassword,
+    string ConfirmNewPassword
+);
+
+
+public sealed record RefreshTokenRequest(
+    string RefreshToken
+);
+
+
+public sealed record RefreshTokenResponse(
+    string Token,
+    DateTime ExpiresAt
+);
+
+/// <summary>
+/// Response for GET /Auth/employee-by-code/{code}.
+/// Frontend expects fullName (or fullname/name) in the data.
+/// </summary>
+public sealed record EmployeeByCodeDto(
+    string FullName,
+    string Code
+);
+
+
+public sealed record UserDto(
+    int UserId,
+    int? EmployeeId,
+    string? EmployeeName,
+    string? EmployeeCode,
+    string Username,
+    string Email,
+    string Role,
+    bool IsActive,
+    DateTime? LastLogin,
+    int FailedLoginAttempts,
+    DateTime? LockoutUntil,
+    bool MustChangePassword,
+    DateTime CreatedAt,
+    DateTime? UpdatedAt
+);
+
+
+public sealed record UserSummaryDto(
+    int UserId,
+    string Username,
+    string Email,
+    string Role,
+    bool IsActive,
+    DateTime? LastLogin
+);
+
+public sealed class UserFilterParams : PaginationParams
+{
+    public string? Name { get; set; }
+}
+
+public sealed record UserOptionDto(
+    int UserId,
+    string Username,
+    string Email,
+    string? EmployeeName
+);
+
+public sealed class UserOptionFilterParams
+{
+    private const int MaxTop = 50;
+    private int _top = 20;
+
+    public string? Name { get; set; }
+
+    public int Top
+    {
+        get => _top;
+        set => _top = value > MaxTop ? MaxTop
+                     : value < 1 ? 1
+                     : value;
+    }
+}
+
+public sealed record CreateUserRequest(
+    int? EmployeeId,
+    string? EmployeeCode,
+    string Username,
+    string Email,
+    string Password,
+    string Role,
+    bool MustChangePassword
+);
+
+public sealed record UpdateUserRequest(
+    int? EmployeeId,
+    string? EmployeeCode,
+    string Username,
+    string Email,
+    string Role,
+    bool IsActive,
+    bool MustChangePassword
+);
+
+public sealed record ResetPasswordRequest(
+    string NewPassword,
+    bool MustChangePassword
+);
+
+public sealed record MyProfileDto(
+    int UserId,
+    int? EmployeeId,
+    string? FullName,
     string Username,
     string Email,
     string Role,
     bool MustChangePassword,
-    EmployeeIdentityDto? Employee);
+    DateTime CreatedAt,
+    DateTime? UpdatedAt
+);
 
-public sealed record ChangePasswordRequest(string CurrentPassword, string NewPassword, string ConfirmNewPassword);
-public sealed record RefreshTokenRequest(string RefreshToken);
-public sealed record RefreshTokenResponse(string Token, DateTime ExpiresAt);
-public sealed record ForgotPasswordRequest(string UsernameOrEmail);
-public sealed record ForgotPasswordResponse(string ResetToken, DateTime ExpiresAt);
-public sealed record ConfirmResetPasswordRequest(string ResetToken, string NewPassword, string ConfirmNewPassword);
+public sealed record UpdateMyProfileRequest(
+    string Username,
+    string Email
+);
 
-public sealed class LoginRequestValidator : AbstractValidator<LoginRequest>
+
+
+public static class UserConstants
 {
-    public LoginRequestValidator()
+    public static readonly string[] Roles =
+        ["SuperAdmin", "Admin", "Manager", "Employee"];
+}
+
+
+
+public sealed class LogInRequestValidator : AbstractValidator<LogInRequest>
+{
+    public LogInRequestValidator()
     {
-        RuleFor(x => x.Username).NotEmpty().MaximumLength(100);
-        RuleFor(x => x.Password).NotEmpty();
+        RuleFor(x => x.Username).NotEmpty().WithMessage("Username is required.");
+        RuleFor(x => x.Password).NotEmpty().WithMessage("Password is required.");
     }
 }
 
-public sealed class RegisterEmployeeRequestValidator : AbstractValidator<RegisterEmployeeRequest>
+public sealed class RegRequestValidator : AbstractValidator<RegRequest>
 {
-    public RegisterEmployeeRequestValidator()
+    public RegRequestValidator()
     {
-        RuleFor(x => x.EmployeeCode).NotEmpty().Length(6);
-        RuleFor(x => x.Username).NotEmpty().MaximumLength(100);
-        RuleFor(x => x.Email).NotEmpty().EmailAddress().MaximumLength(200);
+        RuleFor(x => x.Username)
+            .NotEmpty().WithMessage("Username is required.")
+            .MaximumLength(100).WithMessage("Username cannot exceed 100 characters.");
+
+        RuleFor(x => x.Email)
+            .NotEmpty().WithMessage("Email is required.")
+            .EmailAddress().WithMessage("A valid email address is required.")
+            .MaximumLength(200).WithMessage("Email cannot exceed 200 characters.");
+
         RuleFor(x => x.Password)
-            .NotEmpty()
-            .MinimumLength(8)
-            .Matches(@"[A-Z]")
-            .Matches(@"[a-z]")
-            .Matches(@"[0-9]");
-        RuleFor(x => x.ConfirmPassword).Equal(x => x.Password);
+            .NotEmpty().WithMessage("Password is required.")
+            .MinimumLength(8).WithMessage("Password must be at least 8 characters.")
+            .Matches(@"[A-Z]").WithMessage("Password must contain at least one uppercase letter.")
+            .Matches(@"[a-z]").WithMessage("Password must contain at least one lowercase letter.")
+            .Matches(@"[0-9]").WithMessage("Password must contain at least one digit.");
+
+        RuleFor(x => x.ConfirmPassword)
+            .Equal(x => x.Password).WithMessage("Passwords do not match.");
     }
 }
 
@@ -68,144 +218,88 @@ public sealed class ChangePasswordRequestValidator : AbstractValidator<ChangePas
 {
     public ChangePasswordRequestValidator()
     {
-        RuleFor(x => x.CurrentPassword).NotEmpty();
+        RuleFor(x => x.CurrentPassword).NotEmpty().WithMessage("Current password is required.");
+
         RuleFor(x => x.NewPassword)
-            .NotEmpty()
-            .MinimumLength(8)
-            .Matches(@"[A-Z]")
-            .Matches(@"[a-z]")
-            .Matches(@"[0-9]");
-        RuleFor(x => x.ConfirmNewPassword).Equal(x => x.NewPassword);
+            .NotEmpty().WithMessage("New password is required.")
+            .MinimumLength(8).WithMessage("Password must be at least 8 characters.")
+            .Matches(@"[A-Z]").WithMessage("Password must contain at least one uppercase letter.")
+            .Matches(@"[a-z]").WithMessage("Password must contain at least one lowercase letter.")
+            .Matches(@"[0-9]").WithMessage("Password must contain at least one digit.");
+
+        RuleFor(x => x.ConfirmNewPassword)
+            .Equal(x => x.NewPassword).WithMessage("Passwords do not match.");
     }
 }
 
-public sealed class ForgotPasswordRequestValidator : AbstractValidator<ForgotPasswordRequest>
+public sealed class ForgotPassRequestValidator : AbstractValidator<ForgotPassRequest>
 {
-    public ForgotPasswordRequestValidator()
+    public ForgotPassRequestValidator()
     {
-        RuleFor(x => x.UsernameOrEmail).NotEmpty().MaximumLength(200);
+        RuleFor(x => x.Email)
+            .NotEmpty().WithMessage("Email is required.")
+            .EmailAddress().WithMessage("A valid email address is required.")
+            .MaximumLength(200).WithMessage("Email cannot exceed 200 characters.");
     }
 }
 
-public sealed class ConfirmResetPasswordRequestValidator : AbstractValidator<ConfirmResetPasswordRequest>
+public sealed class ResetPasswordByTokenRequestValidator : AbstractValidator<ResetPasswordWithTokenRequest>
 {
-    public ConfirmResetPasswordRequestValidator()
+    public ResetPasswordByTokenRequestValidator()
     {
-        RuleFor(x => x.ResetToken).NotEmpty().MaximumLength(200);
+        RuleFor(x => x.Token).NotEmpty().WithMessage("Reset token is required.");
+
+        RuleFor(x => x.Email)
+            .NotEmpty().WithMessage("Email is required.")
+            .EmailAddress().WithMessage("A valid email address is required.")
+            .MaximumLength(200).WithMessage("Email cannot exceed 200 characters.");
+
         RuleFor(x => x.NewPassword)
-            .NotEmpty()
-            .MinimumLength(8)
-            .Matches(@"[A-Z]")
-            .Matches(@"[a-z]")
-            .Matches(@"[0-9]");
-        RuleFor(x => x.ConfirmNewPassword).Equal(x => x.NewPassword);
+            .NotEmpty().WithMessage("New password is required.")
+            .MinimumLength(8).WithMessage("Password must be at least 8 characters.")
+            .Matches(@"[A-Z]").WithMessage("Password must contain at least one uppercase letter.")
+            .Matches(@"[a-z]").WithMessage("Password must contain at least one lowercase letter.")
+            .Matches(@"[0-9]").WithMessage("Password must contain at least one digit.");
+
+        RuleFor(x => x.ConfirmNewPassword)
+            .Equal(x => x.NewPassword).WithMessage("Passwords do not match.");
     }
 }
-
-public static class RoleConstants
-{
-    public const string Admin = "admin";
-    public const string Default = "user";
-}
-
-public sealed record UserDto(
-    long UserId,
-    long? EmployeeId,
-    string Username,
-    string Email,
-    string Role,
-    bool IsActive,
-    int FailedLoginAttempts,
-    bool MustChangePassword,
-    DateTime? LastLogin,
-    DateTime? LockoutUntil,
-    DateTime CreatedAt,
-    DateTime? UpdatedAt,
-    EmployeeIdentityDto? Employee);
-
-public sealed record UserSummaryDto(
-    long UserId,
-    long? EmployeeId,
-    string Username,
-    string Email,
-    string Role,
-    bool IsActive,
-    bool MustChangePassword,
-    DateTime? LastLogin,
-    string? EmployeeCode,
-    string? FullName);
-
-public sealed record UserOptionDto(
-    long UserId,
-    string Username,
-    string Email,
-    string Role,
-    string? EmployeeCode,
-    string? FullName);
-
-public sealed class UserFilterParams : PaginationParams
-{
-    public string? Search { get; set; }
-    public string? Role { get; set; }
-    public bool? IsActive { get; set; }
-}
-
-public sealed class UserOptionFilterParams
-{
-    private const int MaxTop = 50;
-    private int _top = 20;
-
-    public string? Search { get; set; }
-
-    public int Top
-    {
-        get => _top;
-        set => _top = value < 1 ? 1 : value > MaxTop ? MaxTop : value;
-    }
-}
-
-public sealed record CreateUserRequest(
-    long? EmployeeId,
-    string Username,
-    string Email,
-    string Password,
-    string Role,
-    bool IsActive,
-    bool MustChangePassword);
-
-public sealed record UpdateUserRequest(
-    long? EmployeeId,
-    string Username,
-    string Email,
-    string Role,
-    bool IsActive,
-    bool MustChangePassword);
-
-public sealed record MyProfileDto(
-    long UserId,
-    long? EmployeeId,
-    string Username,
-    string Email,
-    string Role,
-    bool MustChangePassword,
-    EmployeeIdentityDto? Employee);
-
-public sealed record UpdateMyProfileRequest(string Username, string Email);
 
 public sealed class CreateUserRequestValidator : AbstractValidator<CreateUserRequest>
 {
     public CreateUserRequestValidator()
     {
-        RuleFor(x => x.EmployeeId).GreaterThan(0).When(x => x.EmployeeId.HasValue);
-        RuleFor(x => x.Username).NotEmpty().MaximumLength(100);
-        RuleFor(x => x.Email).NotEmpty().EmailAddress().MaximumLength(200);
+        RuleFor(x => x.Username)
+            .NotEmpty().WithMessage("Username is required.")
+            .MaximumLength(100).WithMessage("Username cannot exceed 100 characters.");
+
+        RuleFor(x => x.Email)
+            .NotEmpty().WithMessage("Email is required.")
+            .EmailAddress().WithMessage("A valid email address is required.")
+            .MaximumLength(200).WithMessage("Email cannot exceed 200 characters.");
+
         RuleFor(x => x.Password)
+            .NotEmpty().WithMessage("Password is required.")
+            .MinimumLength(8).WithMessage("Password must be at least 8 characters.")
+            .Matches(@"[A-Z]").WithMessage("Password must contain at least one uppercase letter.")
+            .Matches(@"[a-z]").WithMessage("Password must contain at least one lowercase letter.")
+            .Matches(@"[0-9]").WithMessage("Password must contain at least one digit.");
+
+        RuleFor(x => x.Role)
             .NotEmpty()
-            .MinimumLength(8)
-            .Matches(@"[A-Z]")
-            .Matches(@"[a-z]")
-            .Matches(@"[0-9]");
-        RuleFor(x => x.Role).NotEmpty().MaximumLength(50);
+            .Must(r => UserConstants.Roles.Contains(r))
+            .WithMessage($"Role must be one of: {string.Join(", ", UserConstants.Roles)}.");
+
+        RuleFor(x => x.EmployeeId)
+            .GreaterThan(0).When(x => x.EmployeeId.HasValue)
+            .WithMessage("EmployeeId must be a positive integer.");
+
+        RuleFor(x => x.EmployeeCode)
+            .MaximumLength(6).When(x => !string.IsNullOrWhiteSpace(x.EmployeeCode))
+            .WithMessage("Employee code must be up to 6 characters.")
+            .Matches(@"^\d+$").When(x => !string.IsNullOrWhiteSpace(x.EmployeeCode))
+            .WithMessage("Employee code (NIK) must be numeric.");
     }
 }
 
@@ -213,10 +307,42 @@ public sealed class UpdateUserRequestValidator : AbstractValidator<UpdateUserReq
 {
     public UpdateUserRequestValidator()
     {
-        RuleFor(x => x.EmployeeId).GreaterThan(0).When(x => x.EmployeeId.HasValue);
-        RuleFor(x => x.Username).NotEmpty().MaximumLength(100);
-        RuleFor(x => x.Email).NotEmpty().EmailAddress().MaximumLength(200);
-        RuleFor(x => x.Role).NotEmpty().MaximumLength(50);
+        RuleFor(x => x.Username)
+            .NotEmpty().WithMessage("Username is required.")
+            .MaximumLength(100).WithMessage("Username cannot exceed 100 characters.");
+
+        RuleFor(x => x.Email)
+            .NotEmpty().WithMessage("Email is required.")
+            .EmailAddress().WithMessage("A valid email address is required.")
+            .MaximumLength(200).WithMessage("Email cannot exceed 200 characters.");
+
+        RuleFor(x => x.Role)
+            .NotEmpty()
+            .Must(r => UserConstants.Roles.Contains(r))
+            .WithMessage($"Role must be one of: {string.Join(", ", UserConstants.Roles)}.");
+
+        RuleFor(x => x.EmployeeId)
+            .GreaterThan(0).When(x => x.EmployeeId.HasValue)
+            .WithMessage("EmployeeId must be a positive integer.");
+
+        RuleFor(x => x.EmployeeCode)
+            .MaximumLength(6).When(x => !string.IsNullOrWhiteSpace(x.EmployeeCode))
+            .WithMessage("Employee code must be up to 6 characters.")
+            .Matches(@"^\d+$").When(x => !string.IsNullOrWhiteSpace(x.EmployeeCode))
+            .WithMessage("Employee code (NIK) must be numeric.");
+    }
+}
+
+public sealed class ResetPasswordRequestValidator : AbstractValidator<ResetPasswordRequest>
+{
+    public ResetPasswordRequestValidator()
+    {
+        RuleFor(x => x.NewPassword)
+            .NotEmpty().WithMessage("New password is required.")
+            .MinimumLength(8).WithMessage("Password must be at least 8 characters.")
+            .Matches(@"[A-Z]").WithMessage("Password must contain at least one uppercase letter.")
+            .Matches(@"[a-z]").WithMessage("Password must contain at least one lowercase letter.")
+            .Matches(@"[0-9]").WithMessage("Password must contain at least one digit.");
     }
 }
 
@@ -224,22 +350,13 @@ public sealed class UpdateMyProfileRequestValidator : AbstractValidator<UpdateMy
 {
     public UpdateMyProfileRequestValidator()
     {
-        RuleFor(x => x.Username).NotEmpty().MaximumLength(100);
-        RuleFor(x => x.Email).NotEmpty().EmailAddress().MaximumLength(200);
-    }
-}
+        RuleFor(x => x.Username)
+            .NotEmpty().WithMessage("Username is required.")
+            .MaximumLength(100).WithMessage("Username cannot exceed 100 characters.");
 
-public sealed record ResetPasswordRequest(string NewPassword, bool MustChangePassword = true);
-
-public sealed class ResetPasswordRequestValidator : AbstractValidator<ResetPasswordRequest>
-{
-    public ResetPasswordRequestValidator()
-    {
-        RuleFor(x => x.NewPassword)
-            .NotEmpty()
-            .MinimumLength(8)
-            .Matches(@"[A-Z]")
-            .Matches(@"[a-z]")
-            .Matches(@"[0-9]");
+        RuleFor(x => x.Email)
+            .NotEmpty().WithMessage("Email is required.")
+            .EmailAddress().WithMessage("A valid email address is required.")
+            .MaximumLength(200).WithMessage("Email cannot exceed 200 characters.");
     }
 }

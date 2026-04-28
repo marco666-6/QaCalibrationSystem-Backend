@@ -1,5 +1,8 @@
+using System.Net;
+using System.Net.Mail;
 using FluentValidation;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Project.Application.Common;
 using Project.Application.DTOs;
 using Project.Application.Interfaces;
@@ -7,209 +10,352 @@ using Project.Domain.Entities;
 
 namespace Project.Application.Services;
 
+/// <inheritdoc cref="IAuthService"/>
 public sealed class AuthService : IAuthService
 {
-    private readonly IUserRepository _userRepository;
-    private readonly IJwtTokenService _jwtTokenService;
-    private readonly IValidator<LoginRequest> _loginValidator;
-    private readonly IValidator<RegisterEmployeeRequest> _registerValidator;
-    private readonly IValidator<ChangePasswordRequest> _changePasswordValidator;
-    private readonly IValidator<ForgotPasswordRequest> _forgotPasswordValidator;
-    private readonly IValidator<ConfirmResetPasswordRequest> _confirmResetPasswordValidator;
+    private readonly IUserRepository _userRepo;
+    private readonly IJwtTokenService _jwtService;
+    private readonly IValidator<LogInRequest> _loginValidator;
+    private readonly IValidator<RegRequest> _registerValidator;
+    private readonly IValidator<ChangePasswordRequest> _passwordValidator;
+    private readonly IValidator<ForgotPassRequest> _forgotPasswordValidator;
+    private readonly IValidator<ResetPasswordWithTokenRequest> _resetPasswordValidator;
+    private readonly EmailNotificationSettings _notificationSettings;
     private readonly ILogger<AuthService> _logger;
 
     private const int MaxFailedAttempts = 5;
     private const int LockoutMinutes = 30;
-    private const int ResetPasswordTokenMinutes = 30;
+    private static readonly TimeSpan PasswordResetTokenLifetime = TimeSpan.FromMinutes(30);
 
     public AuthService(
-        IUserRepository userRepository,
-        IJwtTokenService jwtTokenService,
-        IValidator<LoginRequest> loginValidator,
-        IValidator<RegisterEmployeeRequest> registerValidator,
-        IValidator<ChangePasswordRequest> changePasswordValidator,
-        IValidator<ForgotPasswordRequest> forgotPasswordValidator,
-        IValidator<ConfirmResetPasswordRequest> confirmResetPasswordValidator,
+        IUserRepository userRepo,
+        IJwtTokenService jwtService,
+        IValidator<LogInRequest> loginValidator,
+        IValidator<RegRequest> registerValidator,
+        IValidator<ChangePasswordRequest> passwordValidator,
+        IValidator<ForgotPassRequest> forgotPasswordValidator,
+        IValidator<ResetPasswordWithTokenRequest> resetPasswordValidator,
+        IOptions<EmailNotificationSettings> notificationSettings,
         ILogger<AuthService> logger)
     {
-        _userRepository = userRepository;
-        _jwtTokenService = jwtTokenService;
+        _userRepo = userRepo;
+        _jwtService = jwtService;
         _loginValidator = loginValidator;
         _registerValidator = registerValidator;
-        _changePasswordValidator = changePasswordValidator;
+        _passwordValidator = passwordValidator;
         _forgotPasswordValidator = forgotPasswordValidator;
-        _confirmResetPasswordValidator = confirmResetPasswordValidator;
+        _resetPasswordValidator = resetPasswordValidator;
+        _notificationSettings = notificationSettings.Value;
         _logger = logger;
     }
 
-    public async Task<ApiResponse<LoginResponse>> LoginAsync(LoginRequest request)
+    public async Task<ApiResponse<LoginResponse>> LoginAsync(LogInRequest request)
     {
         var validation = await _loginValidator.ValidateAsync(request);
         if (!validation.IsValid)
-            return ApiResponse<LoginResponse>.Fail("Validation failed.", validation.Errors.Select(x => x.ErrorMessage));
+            return ApiResponse<LoginResponse>.Fail(
+                "Validation failed.",
+                validation.Errors.Select(e => e.ErrorMessage));
 
-        var user = await _userRepository.GetByUsernameAsync(request.Username.Trim());
-        if (user is null || !user.IsActive)
-            return ApiResponse<LoginResponse>.Fail("Invalid username or password.");
-
-        if (user.IsLockedOut)
-            return ApiResponse<LoginResponse>.Fail("Account is temporarily locked.");
-
-        if (!BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
+        var user = await _userRepo.GetByUsernameAsync(request.Username);
+        if (user is null)
         {
-            await _userRepository.IncrementFailedLoginAttemptsAsync(user.UserId);
-            if (user.FailedLoginAttempts + 1 >= MaxFailedAttempts)
-            {
-                await _userRepository.LockAccountAsync(user.UserId, DateTime.UtcNow.AddMinutes(LockoutMinutes));
-                return ApiResponse<LoginResponse>.Fail("Account is temporarily locked.");
-            }
-
+            _logger.LogWarning("Login failed: Username '{Username}' not found", request.Username);
             return ApiResponse<LoginResponse>.Fail("Invalid username or password.");
         }
 
-        await _userRepository.ResetFailedLoginAttemptsAsync(user.UserId);
-        await _userRepository.UpdateLastLoginAsync(user.UserId);
-        return await BuildLoginResponseAsync(user);
+        if (!user.IsActive)
+        {
+            _logger.LogWarning("Login failed: User '{Username}' is inactive", request.Username);
+            return ApiResponse<LoginResponse>.Fail("Account is inactive. Contact administrator.");
+        }
+
+        if (user.IsLockedOut)
+        {
+            var remainingMinutes = (int)(user.LockoutUntil!.Value - DateTime.UtcNow).TotalMinutes;
+            _logger.LogWarning("Login failed: User '{Username}' is locked out", request.Username);
+            return ApiResponse<LoginResponse>.Fail(
+                $"Account is temporarily locked. Try again in {remainingMinutes} minutes.");
+        }
+
+        if (!BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
+        {
+            await _userRepo.IncrementFailedLoginAttemptsAsync(user.UserId);
+
+            if (user.FailedLoginAttempts + 1 >= MaxFailedAttempts)
+            {
+                await _userRepo.LockAccountAsync(
+                    user.UserId,
+                    DateTime.UtcNow.AddMinutes(LockoutMinutes));
+
+                _logger.LogWarning(
+                    "User '{Username}' locked after {Attempts} failed login attempts",
+                    request.Username, MaxFailedAttempts);
+
+                return ApiResponse<LoginResponse>.Fail(
+                    $"Account locked due to {MaxFailedAttempts} failed login attempts. " +
+                    $"Try again in {LockoutMinutes} minutes.");
+            }
+
+            _logger.LogWarning("Login failed: Invalid password for '{Username}'", request.Username);
+            return ApiResponse<LoginResponse>.Fail("Invalid username or password.");
+        }
+
+        await _userRepo.ResetFailedLoginAttemptsAsync(user.UserId);
+        await _userRepo.UpdateLastLoginAsync(user.UserId);
+
+        return await BuildLoginResponseAsync(user, request.Username);
     }
 
-    public async Task<ApiResponse<LoginResponse>> RegisterEmployeeAsync(RegisterEmployeeRequest request)
+    public async Task<ApiResponse<LoginResponse>> RegisterAsync(RegRequest request)
     {
         var validation = await _registerValidator.ValidateAsync(request);
         if (!validation.IsValid)
-            return ApiResponse<LoginResponse>.Fail("Validation failed.", validation.Errors.Select(x => x.ErrorMessage));
+            return ApiResponse<LoginResponse>.Fail(
+                "Validation failed.",
+                validation.Errors.Select(e => e.ErrorMessage));
 
-        if (await _userRepository.UsernameExistsAsync(request.Username.Trim()))
+        if (await _userRepo.UsernameExistsAsync(request.Username))
             return ApiResponse<LoginResponse>.Fail($"Username '{request.Username}' is already in use.");
 
-        var normalizedEmail = request.Email.Trim().ToLowerInvariant();
-        if (await _userRepository.EmailExistsAsync(normalizedEmail))
+        if (await _userRepo.EmailExistsAsync(request.Email))
             return ApiResponse<LoginResponse>.Fail($"Email '{request.Email}' is already registered.");
-
-        var employeeCode = request.EmployeeCode.Trim();
-        var employee = await _userRepository.GetSharedEmployeeByCodeAsync(employeeCode);
-        if (employee is null)
-            return ApiResponse<LoginResponse>.Fail("Employee was not found in the shared HR directory.");
-
-        var employeeId = await _userRepository.UpsertSharedEmployeeAsync(employeeCode, normalizedEmail);
-        if (!employeeId.HasValue || employeeId.Value <= 0)
-            return ApiResponse<LoginResponse>.Fail("Employee could not be synchronized from the shared HR directory.");
-
-        if (await _userRepository.EmployeeAlreadyAssignedAsync(employeeId.Value))
-            return ApiResponse<LoginResponse>.Fail("Employee already has a user account.");
 
         var user = new User
         {
-            EmployeeId = employeeId.Value,
-            EmployeeCode = employeeCode,
+            EmployeeCode = request.EmployeeCode,
             Username = request.Username.Trim(),
-            Email = normalizedEmail,
+            Email = request.Email.Trim().ToLowerInvariant(),
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
-            Role = RoleConstants.Default,
+            Role = "Employee",
             IsActive = true,
             MustChangePassword = false,
             CreatedAt = DateTime.UtcNow
         };
 
-        user.UserId = await _userRepository.CreateAsync(user);
-        _logger.LogInformation("Employee self-registration created user {UserId}", user.UserId);
+        try
+        {
+            user.UserId = await _userRepo.CreateAsync(user);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "Failed to create user during registration for username '{Username}' and email '{Email}'",
+                user.Username,
+                user.Email);
 
-        var created = await _userRepository.GetByIdAsync(user.UserId) ?? user;
-        return await BuildLoginResponseAsync(created);
+            return ApiResponse<LoginResponse>.Fail("Failed to register user. Please try again later.");
+        }
+
+        _logger.LogInformation("Self-service registration created user '{Username}' with ID {UserId}", user.Username, user.UserId);
+
+        return await BuildLoginResponseAsync(user, user.Username);
     }
 
-    public async Task<ApiResponse> ChangePasswordAsync(long userId, ChangePasswordRequest request)
+    public async Task<ApiResponse<EmployeeByCodeDto>> GetEmployeeByCodeAsync(string code)
     {
-        var validation = await _changePasswordValidator.ValidateAsync(request);
-        if (!validation.IsValid)
-            return ApiResponse.Fail("Validation failed.", validation.Errors.Select(x => x.ErrorMessage));
+        if (string.IsNullOrWhiteSpace(code))
+            return ApiResponse<EmployeeByCodeDto>.Fail("Employee code is required.");
 
-        var user = await _userRepository.GetByIdAsync(userId);
+        var normalizedCode = code.Trim();
+        if (normalizedCode.Length > 6 || normalizedCode.Any(c => !char.IsDigit(c)))
+            return ApiResponse<EmployeeByCodeDto>.Fail("Employee code must be numeric and up to 6 digits.");
+
+        var employee = await _userRepo.GetEmployeeByCodeAsync(normalizedCode);
+        if (employee is null)
+            return ApiResponse<EmployeeByCodeDto>.NotFound($"Employee with code '{normalizedCode}' was not found.");
+
+        return ApiResponse<EmployeeByCodeDto>.Ok(employee);
+    }
+
+    public async Task<ApiResponse<ForgotPasswordResponse>> ForgotPasswordAsync(ForgotPassRequest request)
+    {
+        var validation = await _forgotPasswordValidator.ValidateAsync(request);
+        if (!validation.IsValid)
+            return ApiResponse<ForgotPasswordResponse>.Fail(
+                "Validation failed.",
+                validation.Errors.Select(e => e.ErrorMessage));
+
+        var normalizedEmail = request.Email.Trim().ToLowerInvariant();
+        var user = await _userRepo.GetByEmailAsync(normalizedEmail);
+
+        if (user is null || !user.IsActive)
+        {
+            _logger.LogInformation("Forgot password requested for unavailable email {Email}", normalizedEmail);
+            return ApiResponse<ForgotPasswordResponse>.Ok(
+                new ForgotPasswordResponse(null),
+                "If an account exists for that email, password reset instructions have been sent.");
+        }
+
+        var tokenValue = Guid.NewGuid().ToString("N");
+        var expiresAt = DateTime.UtcNow.Add(PasswordResetTokenLifetime);
+
+        await _userRepo.InvalidatePasswordResetTokensAsync(user.UserId);
+        await _userRepo.CreatePasswordResetTokenAsync(new PasswordResetToken
+        {
+            UserId = user.UserId,
+            Token = tokenValue,
+            ExpiresAt = expiresAt,
+            CreatedAt = DateTime.UtcNow
+        });
+
+        var resetUrl = BuildResetUrl(tokenValue, user.Email);
+
+        try
+        {
+            await SendPasswordResetEmailAsync(user, resetUrl);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to send password reset email to user ID {UserId}", user.UserId);
+        }
+
+        return ApiResponse<ForgotPasswordResponse>.Ok(
+            new ForgotPasswordResponse(resetUrl),
+            "If an account exists for that email, password reset instructions have been sent.");
+    }
+
+    public async Task<ApiResponse> ResetPasswordAsync(ResetPasswordWithTokenRequest request)
+    {
+        var validation = await _resetPasswordValidator.ValidateAsync(request);
+        if (!validation.IsValid)
+            return ApiResponse.Fail(
+                "Validation failed.",
+                validation.Errors.Select(e => e.ErrorMessage));
+
+        var resetToken = await _userRepo.GetValidPasswordResetTokenAsync(request.Token);
+        if (resetToken is null)
+            return ApiResponse.Fail("Reset token is invalid or expired.");
+
+        var normalizedEmail = request.Email.Trim().ToLowerInvariant();
+        var user = await _userRepo.GetByIdAsync(resetToken.UserId);
+        if (user is null || !user.IsActive || !string.Equals(user.Email, normalizedEmail, StringComparison.OrdinalIgnoreCase))
+            return ApiResponse.Fail("Reset token is invalid or expired.");
+
+        var newHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
+        await _userRepo.UpdatePasswordAsync(user.UserId, newHash);
+        await _userRepo.ResetFailedLoginAttemptsAsync(user.UserId);
+        await _userRepo.ConsumePasswordResetTokenAsync(resetToken.Id, DateTime.UtcNow);
+        await _userRepo.InvalidatePasswordResetTokensAsync(user.UserId);
+
+        _logger.LogInformation("Password reset completed for user ID {UserId}", user.UserId);
+
+        return ApiResponse.Ok("Password reset successfully.");
+    }
+
+    public async Task<ApiResponse> ChangePasswordAsync(
+        int userId, ChangePasswordRequest request)
+    {
+        var validation = await _passwordValidator.ValidateAsync(request);
+        if (!validation.IsValid)
+            return ApiResponse.Fail(
+                "Validation failed.",
+                validation.Errors.Select(e => e.ErrorMessage));
+
+        var user = await _userRepo.GetByIdAsync(userId);
         if (user is null)
-            return ApiResponse.NotFound("User not found.");
+            return ApiResponse.Fail("User not found.");
 
         if (!BCrypt.Net.BCrypt.Verify(request.CurrentPassword, user.PasswordHash))
             return ApiResponse.Fail("Current password is incorrect.");
 
-        await _userRepository.UpdatePasswordAsync(userId, BCrypt.Net.BCrypt.HashPassword(request.NewPassword), mustChangePassword: false);
-        await _userRepository.ResetFailedLoginAttemptsAsync(userId);
+        var newHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
+        await _userRepo.UpdatePasswordAsync(userId, newHash);
+
+        _logger.LogInformation("Password changed for user ID {UserId}", userId);
+
         return ApiResponse.Ok("Password changed successfully.");
     }
 
     public async Task<ApiResponse<RefreshTokenResponse>> RefreshTokenAsync(RefreshTokenRequest request)
     {
-        var user = await _userRepository.GetByRefreshTokenAsync(request.RefreshToken);
-        if (user is null || !user.IsActive)
+        var user = await _userRepo.GetByRefreshTokenAsync(request.RefreshToken);
+        if (user is null)
+        {
+            _logger.LogWarning("Refresh token invalid or expired");
             return ApiResponse<RefreshTokenResponse>.Fail("Invalid or expired refresh token.");
+        }
 
-        var token = _jwtTokenService.GenerateToken(user);
-        return ApiResponse<RefreshTokenResponse>.Ok(new RefreshTokenResponse(token, DateTime.UtcNow.AddMinutes(60)));
+        if (!user.IsActive)
+        {
+            _logger.LogWarning("Refresh token used by inactive user ID {UserId}", user.UserId);
+            return ApiResponse<RefreshTokenResponse>.Fail("User account is inactive.");
+        }
+
+        var token = _jwtService.GenerateToken(user);
+        var expiresAt = DateTime.UtcNow.AddMinutes(60);
+
+        _logger.LogInformation("User ID {UserId} refreshed token", user.UserId);
+
+        return ApiResponse<RefreshTokenResponse>.Ok(new RefreshTokenResponse(token, expiresAt));
     }
 
-    public async Task<ApiResponse<ForgotPasswordResponse>> ForgotPasswordAsync(ForgotPasswordRequest request)
+    private async Task<ApiResponse<LoginResponse>> BuildLoginResponseAsync(User user, string usernameForLog)
     {
-        var validation = await _forgotPasswordValidator.ValidateAsync(request);
-        if (!validation.IsValid)
-            return ApiResponse<ForgotPasswordResponse>.Fail("Validation failed.", validation.Errors.Select(x => x.ErrorMessage));
+        var token = _jwtService.GenerateToken(user);
+        var expiresAt = DateTime.UtcNow.AddMinutes(60);
 
-        var user = await _userRepository.GetByUsernameOrEmailAsync(request.UsernameOrEmail.Trim());
-        if (user is null || !user.IsActive)
-            return ApiResponse<ForgotPasswordResponse>.Fail("User was not found for the provided username/email.");
+        var refreshToken = _jwtService.GenerateRefreshToken();
+        var refreshTokenExpiresAt = DateTime.UtcNow.AddDays(7);
+        await _userRepo.StoreRefreshTokenAsync(user.UserId, refreshToken, refreshTokenExpiresAt);
 
-        await _userRepository.InvalidatePasswordResetTokensAsync(user.UserId);
-
-        var resetToken = _jwtTokenService.GenerateRefreshToken();
-        var expiresAt = DateTime.UtcNow.AddMinutes(ResetPasswordTokenMinutes);
-        await _userRepository.CreatePasswordResetTokenAsync(user.UserId, resetToken, expiresAt);
-
-        _logger.LogInformation("Password reset token created for user {UserId}", user.UserId);
-        return ApiResponse<ForgotPasswordResponse>.Ok(new ForgotPasswordResponse(resetToken, expiresAt), "Password reset token created.");
-    }
-
-    public async Task<ApiResponse> ConfirmResetPasswordAsync(ConfirmResetPasswordRequest request)
-    {
-        var validation = await _confirmResetPasswordValidator.ValidateAsync(request);
-        if (!validation.IsValid)
-            return ApiResponse.Fail("Validation failed.", validation.Errors.Select(x => x.ErrorMessage));
-
-        var token = await _userRepository.GetPasswordResetTokenAsync(request.ResetToken.Trim());
-        if (token is null || token.ConsumedAt.HasValue || token.ExpiresAt <= DateTime.UtcNow)
-            return ApiResponse.Fail("Invalid or expired password reset token.");
-
-        var user = await _userRepository.GetByIdAsync(token.UserId);
-        if (user is null || !user.IsActive)
-            return ApiResponse.Fail("User account is invalid or inactive.");
-
-        await _userRepository.UpdatePasswordAsync(user.UserId, BCrypt.Net.BCrypt.HashPassword(request.NewPassword), mustChangePassword: false);
-        await _userRepository.ResetFailedLoginAttemptsAsync(user.UserId);
-        await _userRepository.ConsumePasswordResetTokenAsync(token.Id, DateTime.UtcNow);
-        await _userRepository.StoreRefreshTokenAsync(user.UserId, string.Empty, DateTime.UtcNow);
-
-        return ApiResponse.Ok("Password reset successfully.");
-    }
-
-    private async Task<ApiResponse<LoginResponse>> BuildLoginResponseAsync(User user)
-    {
-        var token = _jwtTokenService.GenerateToken(user);
-        var refreshToken = _jwtTokenService.GenerateRefreshToken();
-        var refreshExpiresAt = DateTime.UtcNow.AddDays(7);
-        await _userRepository.StoreRefreshTokenAsync(user.UserId, refreshToken, refreshExpiresAt);
+        _logger.LogInformation("User '{Username}' authenticated successfully", usernameForLog);
 
         return ApiResponse<LoginResponse>.Ok(new LoginResponse(
             token,
-            DateTime.UtcNow.AddMinutes(60),
+            expiresAt,
             refreshToken,
-            refreshExpiresAt,
+            refreshTokenExpiresAt,
             user.UserId,
-            user.EmployeeId,
             user.Username,
             user.Email,
             user.Role,
-            user.MustChangePassword,
-            MapEmployee(user.Employee)));
+            user.MustChangePassword));
     }
 
-    private static EmployeeIdentityDto? MapEmployee(Employee? employee)
-        => employee is null
-            ? null
-            : new EmployeeIdentityDto(employee.EmployeeId, employee.EmployeeCode, employee.FullName, employee.Email);
+    private string BuildResetUrl(string token, string email)
+    {
+        var baseUrl = _notificationSettings.FrontendBaseUrl?.TrimEnd('/');
+        if (string.IsNullOrWhiteSpace(baseUrl))
+        {
+            return $"/session/reset-password?token={Uri.EscapeDataString(token)}&email={Uri.EscapeDataString(email)}";
+        }
+
+        return $"{baseUrl}/session/reset-password?token={Uri.EscapeDataString(token)}&email={Uri.EscapeDataString(email)}";
+    }
+
+    private async Task SendPasswordResetEmailAsync(User user, string resetUrl)
+    {
+        if (!_notificationSettings.Enabled ||
+            string.IsNullOrWhiteSpace(_notificationSettings.SmtpHost) ||
+            string.IsNullOrWhiteSpace(_notificationSettings.SenderEmail))
+        {
+            return;
+        }
+
+        using var client = new SmtpClient(_notificationSettings.SmtpHost, _notificationSettings.SmtpPort)
+        {
+            EnableSsl = _notificationSettings.UseSsl,
+            DeliveryMethod = SmtpDeliveryMethod.Network,
+            Credentials = string.IsNullOrWhiteSpace(_notificationSettings.Username)
+                ? CredentialCache.DefaultNetworkCredentials
+                : new NetworkCredential(_notificationSettings.Username, _notificationSettings.Password)
+        };
+
+        using var message = new MailMessage
+        {
+            From = new MailAddress(_notificationSettings.SenderEmail, _notificationSettings.SenderName),
+            Subject = "Reset your password",
+            Body =
+                $"Hello {user.Username},\n\n" +
+                "We received a request to reset your password.\n" +
+                $"Use the link below to set a new password:\n{resetUrl}\n\n" +
+                "If you did not request this, you can ignore this email.",
+            IsBodyHtml = false
+        };
+
+        message.To.Add(new MailAddress(user.Email, user.Username));
+        await client.SendMailAsync(message);
+    }
 }

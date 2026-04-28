@@ -3,30 +3,47 @@ using Project.Domain.Entities;
 
 namespace Project.Application.Interfaces;
 
+
 public interface IUserRepository
 {
+
     Task<User?> GetByUsernameAsync(string username);
-    Task<User?> GetByIdAsync(long userId);
+
+    Task<User?> GetByEmailAsync(string email);
+
+    Task UpdateLastLoginAsync(int userId);
+    Task IncrementFailedLoginAttemptsAsync(int userId);
+
+    Task ResetFailedLoginAttemptsAsync(int userId);
+
+    Task LockAccountAsync(int userId, DateTime lockoutUntil);
+
+    Task StoreRefreshTokenAsync(int userId, string refreshToken, DateTime expiresAt);
+
     Task<User?> GetByRefreshTokenAsync(string refreshToken);
-    Task<Employee?> GetSharedEmployeeByCodeAsync(string employeeCode);
-    Task<long?> UpsertSharedEmployeeAsync(string employeeCode, string? email);
+    Task<EmployeeByCodeDto?> GetEmployeeByCodeAsync(string code);
+
+
+    Task<int?> UpsertEmployeeIdFromNikAsync(string employeeCode, string email);
+    Task CreatePasswordResetTokenAsync(PasswordResetToken token);
+    Task<PasswordResetToken?> GetValidPasswordResetTokenAsync(string token);
+    Task InvalidatePasswordResetTokensAsync(int userId);
+    Task ConsumePasswordResetTokenAsync(long id, DateTime consumedAt);
+
+
     Task<(IEnumerable<User> Items, int TotalCount)> GetAllAsync(UserFilterParams filters);
     Task<IEnumerable<User>> GetOptionsAsync(UserOptionFilterParams filters);
-    Task<bool> UsernameExistsAsync(string username, long? excludeUserId = null);
-    Task<bool> EmailExistsAsync(string email, long? excludeUserId = null);
-    Task<bool> EmployeeAlreadyAssignedAsync(long employeeId, long? excludeUserId = null);
-    Task<long> CreateAsync(User user);
+    Task<User?> GetByIdAsync(int userId);
+    Task<bool> UsernameExistsAsync(string username, int? excludeUserId = null);
+
+    Task<bool> EmailExistsAsync(string email, int? excludeUserId = null);
+
+
+    Task<int> CreateAsync(User user);
+
     Task<bool> UpdateAsync(User user);
-    Task<bool> UpdatePasswordAsync(long userId, string newPasswordHash, bool mustChangePassword);
-    Task<bool> SoftDeleteAsync(long userId);
-    Task<User?> GetByUsernameOrEmailAsync(string usernameOrEmail);
-    Task<PasswordResetToken?> GetPasswordResetTokenAsync(string token);
-    Task<long> CreatePasswordResetTokenAsync(long userId, string token, DateTime expiresAt);
-    Task InvalidatePasswordResetTokensAsync(long userId);
-    Task ConsumePasswordResetTokenAsync(long passwordResetTokenId, DateTime consumedAt);
-    Task UpdateLastLoginAsync(long userId);
-    Task IncrementFailedLoginAttemptsAsync(long userId);
-    Task ResetFailedLoginAttemptsAsync(long userId);
-    Task LockAccountAsync(long userId, DateTime lockoutUntil);
-    Task StoreRefreshTokenAsync(long userId, string refreshToken, DateTime expiresAt);
+
+    Task<bool> UpdatePasswordAsync(int userId, string newPasswordHash);
+
+    Task<bool> SoftDeleteAsync(int userId);
 }

@@ -18,17 +18,16 @@
     },
     "IIS Express": {
       "commandName": "IISExpress",
-      "launchBrowser": true,
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
       }
     },
     "QaCalibrationSystem": {
       "commandName": "Project",
-      "launchBrowser": true,
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
       },
+      "dotnetRunMessages": true,
       "applicationUrl": "http://localhost:5033"
     }
   },
@@ -37,8 +36,8 @@
     "windowsAuthentication": false,
     "anonymousAuthentication": true,
     "iisExpress": {
-      "applicationUrl": "http://localhost:50765/",
-      "sslPort": 44300
+      "applicationUrl": "http://localhost:65149/",
+      "sslPort": 44377
     }
   }
 }
