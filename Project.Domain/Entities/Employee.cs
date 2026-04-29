@@ -6,7 +6,6 @@ using System.Threading.Tasks;
 
 namespace Project.Domain.Entities
 {
-
     public class Employee
     {
         public int EmployeeId { get; set; }
@@ -19,6 +18,5 @@ namespace Project.Domain.Entities
         public string? Phone { get; set; }
         public DateTime? DateOfBirth { get; set; }
         public string? Gender { get; set; }
-     
     }
 }

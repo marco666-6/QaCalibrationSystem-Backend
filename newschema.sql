@@ -1,11 +1,11 @@
-IF NOT EXISTS (SELECT 1 FROM sys.databases WHERE name = 'qa_calib')
+IF NOT EXISTS (SELECT 1 FROM sys.databases WHERE name = 'QaCalibMS')
 BEGIN
-    CREATE DATABASE qa_calib;
+    CREATE DATABASE QaCalibMS;
 END;
 
 GO
 
-USE [qa_calib];
+USE [QaCalibMS];
 
 GO
 
@@ -28,9 +28,6 @@ IF OBJECT_ID('dbo.users', 'U') IS NOT NULL DROP TABLE dbo.users;
 IF OBJECT_ID('dbo.sections', 'U') IS NOT NULL DROP TABLE dbo.sections;
 IF OBJECT_ID('dbo.positions', 'U') IS NOT NULL DROP TABLE dbo.positions;
 IF OBJECT_ID('dbo.locations', 'U') IS NOT NULL DROP TABLE dbo.locations;
-
-IF OBJECT_ID('dbo.sections_bkp', 'U') IS NOT NULL DROP TABLE dbo.sections_bkp;
-IF OBJECT_ID('dbo.positions_bkp', 'U') IS NOT NULL DROP TABLE dbo.positions_bkp;
 GO
 
 
@@ -39,8 +36,8 @@ GO
 -- =========================
 CREATE TABLE dbo.sections (
     section_id      INT IDENTITY PRIMARY KEY,
-    section_code    NVARCHAR(50) NOT NULL UNIQUE,
-    section_name    NVARCHAR(200) NOT NULL,
+    section_code    NVARCHAR(6) NOT NULL UNIQUE,
+    section_name    NVARCHAR(100) NOT NULL,
     is_active       BIT NOT NULL DEFAULT 1,
     created_at      DATETIME2 NOT NULL DEFAULT GETDATE(),
     updated_at      DATETIME2 NULL
@@ -63,6 +60,18 @@ GO
 
 
 -- =========================
+-- DEFAULT LOCATIONS
+-- =========================
+CREATE TABLE dbo.default_locations (
+    location_id      INT IDENTITY PRIMARY KEY,
+    location_name    NVARCHAR(200) NOT NULL,
+    is_active        BIT NOT NULL DEFAULT 1,
+    created_at       DATETIME2 NOT NULL DEFAULT GETDATE(),
+    updated_at       DATETIME2 NULL
+);
+GO
+
+-- =========================
 -- LOCATIONS
 -- =========================
 CREATE TABLE dbo.locations (
@@ -76,39 +85,11 @@ GO
 
 
 -- =========================
--- SECTIONS BACKUP
--- =========================
-CREATE TABLE dbo.sections_bkp (
-    section_id      INT IDENTITY PRIMARY KEY,
-    section_code    NVARCHAR(50) NOT NULL UNIQUE,
-    section_name    NVARCHAR(200) NOT NULL,
-    is_active       BIT NOT NULL DEFAULT 1,
-    created_at      DATETIME2 NOT NULL DEFAULT GETDATE(),
-    updated_at      DATETIME2 NULL
-);
-GO
-
-
--- =========================
--- POSITIONS BACKUP
--- =========================
-CREATE TABLE dbo.positions_bkp (
-    position_id      INT IDENTITY PRIMARY KEY,
-    position_code    NVARCHAR(50) NOT NULL UNIQUE,
-    position_name    NVARCHAR(200) NOT NULL,
-    is_active        BIT NOT NULL DEFAULT 1,
-    created_at       DATETIME2 NOT NULL DEFAULT GETDATE(),
-    updated_at       DATETIME2 NULL
-);
-GO
-
-
--- =========================
 -- USERS
 -- =========================
 CREATE TABLE dbo.users (
     user_id                     INT IDENTITY PRIMARY KEY,
-    employee_id                 INT NULL,  -- ref: Shared.dbo.employees.employee_id; cross-database FK intentionally omitted
+    employee_id                 INT NULL,  -- ref: Shared.dbo.employees.employee_id; cross-database Non-FK reference intentionally omitted
     username                    NVARCHAR(100) NOT NULL UNIQUE,
     password_hash               NVARCHAR(500) NOT NULL,
     email                       NVARCHAR(200) NOT NULL,
@@ -120,7 +101,7 @@ CREATE TABLE dbo.users (
     lockout_until               DATETIME2 NULL,
     refresh_token               NVARCHAR(MAX) NULL,
     refresh_token_expires_at    DATETIME2 NULL,
-    created_at                  DATETIME2 NOT NULL DEFAULT GETDATE(),  -- user's creation date, defaults to current date when the record is created
+    created_at                  DATETIME2 NOT NULL DEFAULT GETDATE(),
     updated_at                  DATETIME2 NULL
 );
 GO
@@ -131,10 +112,10 @@ GO
 -- =========================
 CREATE TABLE dbo.password_reset_tokens (
     id             BIGINT IDENTITY PRIMARY KEY,
-    user_id        INT NOT NULL,  -- ref: user id, required to associate the token with a specific user, should reference to the users table i think
+    user_id        INT NOT NULL,  -- ref: users.user_id, required to associate the token with a specific user
     token          NVARCHAR(200) NOT NULL UNIQUE,
     expires_at     DATETIME2 NOT NULL,
-    created_at     DATETIME2 NOT NULL DEFAULT GETDATE(),  -- token creation date, defaults to current date when the record is created
+    created_at     DATETIME2 NOT NULL DEFAULT GETDATE(),
     consumed_at    DATETIME2 NULL,
 
     CONSTRAINT FK_password_reset_tokens_users
@@ -152,14 +133,14 @@ GO
 -- CALIBRATION EQUIPMENTS
 -- =========================
 CREATE TABLE dbo.qa_calib_equipments (
-    id                       INT IDENTITY PRIMARY KEY,  -- equipment's id/identity (primary key with auto-increment)
-    equipment_name           NVARCHAR(200) NOT NULL,  -- equipment's name, it will be heavily used across the system — especially in the app level for grouping identical items and others
+    id                       INT IDENTITY PRIMARY KEY,
+    equipment_name           NVARCHAR(200) NOT NULL,  -- equipment's name, it will be heavily used across the system — especially in the app level for grouping identical equipment name and others
     control_no               NVARCHAR(100) NOT NULL UNIQUE,  -- equipment's control number, unique identifier for each equipment (e.g., "DC-XX", "EQ-001", "AS/MT/002", etc)
-    serial_no                NVARCHAR(100) NULL,  -- equipment's serial number, can be null if not applicable or unknown, basically its serial number
-    brand                    NVARCHAR(200) NULL,  -- equipment's brand, can be null if not applicable or unknown, basically its brand
-    model                    NVARCHAR(200) NULL,  -- equipment's model, can be null if not applicable or unknown, basically its model
+    serial_no                NVARCHAR(100) NULL,
+    brand                    NVARCHAR(100) NULL,
+    model                    NVARCHAR(100) NULL,
     location                 NVARCHAR(200) NOT NULL,  -- equipment's location, choose from existing locations table data (thru autocomplete) or enter a custom one (e.g., room, area, "Dekat Blabla").
-    section_id               INT NOT NULL,  -- ref: section id, cant be null, should reference to the sections table manually, can fallback to its _bkp counterpart if there are any issues with referencing
+    section_id               INT NOT NULL,  -- section id, required to associate the token with a specific user
     pic_id                   INT NOT NULL,  -- ref: Shared.dbo.employees.employee_id
     pic_code                 NVARCHAR(6) NOT NULL,  -- denormalized from Shared.dbo.employees.employee_code
     pic_full_name            NVARCHAR(200) NOT NULL,  -- denormalized from Shared.dbo.employees.full_name
