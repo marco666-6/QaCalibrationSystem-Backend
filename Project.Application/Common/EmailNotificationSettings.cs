@@ -3,7 +3,6 @@
 public sealed class EmailNotificationSettings
 {
     public const string SectionName = "EmailNotifications";
-
     public bool Enabled { get; init; }
     public string SmtpHost { get; init; } = string.Empty;
     public int SmtpPort { get; init; } = 587;

@@ -12,8 +12,6 @@ public sealed class UserRepository : BaseRepository<User>, IUserRepository
     public UserRepository(IDbConnectionFactory connectionFactory)
         : base(connectionFactory) { }
 
-
-
     private const string BaseSelect = """
         SELECT
             u.user_id,
@@ -37,7 +35,6 @@ public sealed class UserRepository : BaseRepository<User>, IUserRepository
         FROM users u
         LEFT JOIN Shared.dbo.employees e ON e.employee_id = u.employee_id
         """;
-
 
     public async Task<User?> GetByUsernameAsync(string username)
     {

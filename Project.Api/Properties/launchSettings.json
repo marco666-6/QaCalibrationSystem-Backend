@@ -6,6 +6,7 @@
         "ASPNETCORE_ENVIRONMENT": "Development"
       },
       "dotnetRunMessages": true,
+      "launchBrowser": false,
       "applicationUrl": "http://localhost:5033"
     },
     "https": {
@@ -14,13 +15,16 @@
         "ASPNETCORE_ENVIRONMENT": "Development"
       },
       "dotnetRunMessages": true,
+      "launchBrowser": false,
       "applicationUrl": "https://localhost:7102;http://localhost:5033"
     },
     "IIS Express": {
       "commandName": "IISExpress",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
-      }
+      },
+      "dotnetRunMessages": true,
+      "launchBrowser": false
     },
     "QaCalibrationSystem": {
       "commandName": "Project",
@@ -28,6 +32,7 @@
         "ASPNETCORE_ENVIRONMENT": "Development"
       },
       "dotnetRunMessages": true,
+      "launchBrowser": false,
       "applicationUrl": "http://localhost:5033"
     }
   },

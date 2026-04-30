@@ -10,8 +10,6 @@ using Project.Infrastructure.Data;
 
 namespace Project.Infrastructure.Repositories
 {
-
-
     public abstract class BaseRepository<T> where T : class
     {
         protected readonly IDbConnectionFactory _connectionFactory;
@@ -20,7 +18,6 @@ namespace Project.Infrastructure.Repositories
         {
             _connectionFactory = connectionFactory;
         }
-
 
         protected async Task<IEnumerable<T>> QueryAsync(
             string sql,

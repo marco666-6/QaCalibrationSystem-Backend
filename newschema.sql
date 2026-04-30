@@ -9,114 +9,92 @@ USE [QaCalibMS];
 
 GO
 
--- =========================
+-- ============================
 -- DROP (safe order)
--- =========================
-IF OBJECT_ID('dbo.qa_calib_equipment_details', 'U') IS NOT NULL DROP TABLE dbo.qa_calib_equipment_details;
-IF OBJECT_ID('dbo.qa_calib_item_details',  'U') IS NOT NULL DROP TABLE dbo.qa_calib_item_details;
-IF OBJECT_ID('dbo.qa_calib_items',         'U') IS NOT NULL DROP TABLE dbo.qa_calib_items;
-IF OBJECT_ID('dbo.qa_calib_approvals',     'U') IS NOT NULL DROP TABLE dbo.qa_calib_approvals;
-IF OBJECT_ID('dbo.qa_calib_workers',       'U') IS NOT NULL DROP TABLE dbo.qa_calib_workers;
-IF OBJECT_ID('dbo.qa_calib_actuals',       'U') IS NOT NULL DROP TABLE dbo.qa_calib_actuals;
-IF OBJECT_ID('dbo.qa_calib_plans',         'U') IS NOT NULL DROP TABLE dbo.qa_calib_plans;
-IF OBJECT_ID('dbo.qa_calib_main_headers',  'U') IS NOT NULL DROP TABLE dbo.qa_calib_main_headers;
-IF OBJECT_ID('dbo.qa_calib_approvers',     'U') IS NOT NULL DROP TABLE dbo.qa_calib_approvers;
-IF OBJECT_ID('dbo.qa_calib_equipments',    'U') IS NOT NULL DROP TABLE dbo.qa_calib_equipments;
-
-IF OBJECT_ID('dbo.password_reset_tokens', 'U') IS NOT NULL DROP TABLE dbo.password_reset_tokens;
-IF OBJECT_ID('dbo.users', 'U') IS NOT NULL DROP TABLE dbo.users;
-IF OBJECT_ID('dbo.sections', 'U') IS NOT NULL DROP TABLE dbo.sections;
-IF OBJECT_ID('dbo.positions', 'U') IS NOT NULL DROP TABLE dbo.positions;
-IF OBJECT_ID('dbo.locations', 'U') IS NOT NULL DROP TABLE dbo.locations;
+-- ============================
+IF OBJECT_ID('', 'U') IS NOT NULL DROP TABLE ;
+IF OBJECT_ID('', 'U') IS NOT NULL DROP TABLE ;
+IF OBJECT_ID('', 'U') IS NOT NULL DROP TABLE ;
+IF OBJECT_ID('', 'U') IS NOT NULL DROP TABLE ;
+IF OBJECT_ID('', 'U') IS NOT NULL DROP TABLE ;
+-- And so on for all tables, in the correct order to avoid FK constraint issues (drop child tables before parent tables)
 GO
 
 
--- =========================
+-- ============================
 -- SECTIONS
--- =========================
+-- ============================
 CREATE TABLE dbo.sections (
-    section_id      INT IDENTITY PRIMARY KEY,
-    section_code    NVARCHAR(6) NOT NULL UNIQUE,
-    section_name    NVARCHAR(100) NOT NULL,
-    is_active       BIT NOT NULL DEFAULT 1,
-    created_at      DATETIME2 NOT NULL DEFAULT GETDATE(),
-    updated_at      DATETIME2 NULL
+    section_id          INT IDENTITY PRIMARY KEY,
+    section_code        NVARCHAR(6) NOT NULL UNIQUE,
+    section_name        NVARCHAR(100) NOT NULL,
+    is_active           BIT NOT NULL DEFAULT 1,
+    created_at          DATETIME2 NOT NULL DEFAULT GETDATE(),
+    updated_at          DATETIME2 NULL
 );
 GO
 
 
--- =========================
+-- ============================
 -- POSITIONS
--- =========================
+-- ============================
 CREATE TABLE dbo.positions (
-    position_id      INT IDENTITY PRIMARY KEY,
-    position_code    NVARCHAR(50) NOT NULL UNIQUE,
-    position_name    NVARCHAR(200) NOT NULL,
-    is_active        BIT NOT NULL DEFAULT 1,
-    created_at       DATETIME2 NOT NULL DEFAULT GETDATE(),
-    updated_at       DATETIME2 NULL
+    position_id         INT IDENTITY PRIMARY KEY,
+    position_code       NVARCHAR(6) NOT NULL UNIQUE,
+    position_name       NVARCHAR(100) NOT NULL,
+    is_active           BIT NOT NULL DEFAULT 1,
+    created_at          DATETIME2 NOT NULL DEFAULT GETDATE(),
+    updated_at          DATETIME2 NULL
 );
 GO
 
 
--- =========================
+-- ============================
 -- DEFAULT LOCATIONS
--- =========================
-CREATE TABLE dbo.default_locations (
-    location_id      INT IDENTITY PRIMARY KEY,
-    location_name    NVARCHAR(200) NOT NULL,
-    is_active        BIT NOT NULL DEFAULT 1,
-    created_at       DATETIME2 NOT NULL DEFAULT GETDATE(),
-    updated_at       DATETIME2 NULL
-);
-GO
-
--- =========================
--- LOCATIONS
--- =========================
-CREATE TABLE dbo.locations (
-    location_id      INT IDENTITY PRIMARY KEY,
-    location_name    NVARCHAR(200) NOT NULL,
-    is_active        BIT NOT NULL DEFAULT 1,
-    created_at       DATETIME2 NOT NULL DEFAULT GETDATE(),
-    updated_at       DATETIME2 NULL
+-- ============================
+CREATE TABLE dbo.def_locations (
+    def_location_id         INT IDENTITY PRIMARY KEY,
+    def_location_name       NVARCHAR(200) NOT NULL,
+    is_active               BIT NOT NULL DEFAULT 1,
+    created_at              DATETIME2 NOT NULL DEFAULT GETDATE(),
+    updated_at              DATETIME2 NULL
 );
 GO
 
 
--- =========================
+-- ============================
 -- USERS
--- =========================
+-- ============================
 CREATE TABLE dbo.users (
-    user_id                     INT IDENTITY PRIMARY KEY,
-    employee_id                 INT NULL,  -- ref: Shared.dbo.employees.employee_id; cross-database Non-FK reference intentionally omitted
-    username                    NVARCHAR(100) NOT NULL UNIQUE,
-    password_hash               NVARCHAR(500) NOT NULL,
-    email                       NVARCHAR(200) NOT NULL,
-    role                        NVARCHAR(50) NOT NULL,
-    is_active                   BIT NOT NULL DEFAULT 1,
-    failed_login_attempts       INT NOT NULL DEFAULT 0,
-    must_change_password        BIT NOT NULL DEFAULT 1,
-    last_login                  DATETIME2 NULL,
-    lockout_until               DATETIME2 NULL,
-    refresh_token               NVARCHAR(MAX) NULL,
-    refresh_token_expires_at    DATETIME2 NULL,
-    created_at                  DATETIME2 NOT NULL DEFAULT GETDATE(),
-    updated_at                  DATETIME2 NULL
+    user_id                         INT IDENTITY PRIMARY KEY,
+    employee_id                     INT NULL,  -- ref: Shared.dbo.employees.employee_id; cross-database No-FK reference intentionally omitted
+    username                        NVARCHAR(100) NOT NULL UNIQUE,
+    password_hash                   NVARCHAR(500) NOT NULL,
+    email                           NVARCHAR(200) NOT NULL,
+    role                            NVARCHAR(50) NOT NULL,
+    is_active                       BIT NOT NULL DEFAULT 1,
+    failed_login_attempts           INT NOT NULL DEFAULT 0,
+    must_change_password            BIT NOT NULL DEFAULT 1,
+    last_login                      DATETIME2 NULL,
+    lockout_until                   DATETIME2 NULL,
+    refresh_token                   NVARCHAR(MAX) NULL,
+    refresh_token_expires_at        DATETIME2 NULL,
+    created_at                      DATETIME2 NOT NULL DEFAULT GETDATE(),
+    updated_at                      DATETIME2 NULL
 );
 GO
 
 
--- =========================
+-- ============================
 -- PASSWORD RESET TOKENS
--- =========================
+-- ============================
 CREATE TABLE dbo.password_reset_tokens (
-    id             BIGINT IDENTITY PRIMARY KEY,
-    user_id        INT NOT NULL,  -- ref: users.user_id, required to associate the token with a specific user
-    token          NVARCHAR(200) NOT NULL UNIQUE,
-    expires_at     DATETIME2 NOT NULL,
-    created_at     DATETIME2 NOT NULL DEFAULT GETDATE(),
-    consumed_at    DATETIME2 NULL,
+    id              BIGINT IDENTITY PRIMARY KEY,
+    user_id         INT NOT NULL,  -- ref: users.user_id; No-FK reference required to associate the token with a specific user in users table
+    token           NVARCHAR(200) NOT NULL UNIQUE,
+    expires_at      DATETIME2 NOT NULL,
+    created_at      DATETIME2 NOT NULL DEFAULT GETDATE(),
+    consumed_at     DATETIME2 NULL,
 
     CONSTRAINT FK_password_reset_tokens_users
         FOREIGN KEY (user_id)
@@ -129,39 +107,38 @@ ON dbo.password_reset_tokens(user_id, consumed_at, expires_at);
 GO
 
 
--- =========================
+-- ============================
 -- CALIBRATION EQUIPMENTS
--- =========================
+-- ============================
 CREATE TABLE dbo.qa_calib_equipments (
-    id                       INT IDENTITY PRIMARY KEY,
-    equipment_name           NVARCHAR(200) NOT NULL,  -- equipment's name, it will be heavily used across the system — especially in the app level for grouping identical equipment name and others
-    control_no               NVARCHAR(100) NOT NULL UNIQUE,  -- equipment's control number, unique identifier for each equipment (e.g., "DC-XX", "EQ-001", "AS/MT/002", etc)
-    serial_no                NVARCHAR(100) NULL,
-    brand                    NVARCHAR(100) NULL,
-    model                    NVARCHAR(100) NULL,
-    location                 NVARCHAR(200) NOT NULL,  -- equipment's location, choose from existing locations table data (thru autocomplete) or enter a custom one (e.g., room, area, "Dekat Blabla").
-    section_id               INT NOT NULL,  -- section id, required to associate the token with a specific user
-    pic_id                   INT NOT NULL,  -- ref: Shared.dbo.employees.employee_id
-    pic_code                 NVARCHAR(6) NOT NULL,  -- denormalized from Shared.dbo.employees.employee_code
-    pic_full_name            NVARCHAR(200) NOT NULL,  -- denormalized from Shared.dbo.employees.full_name
-    calib_interval_months    INT NOT NULL,  -- calibration interval in months (1 = monthly, 3 = every 3 months, 12 = yearly, 20 = every 20 months, etc.)
-    last_calib_date          DATE NOT NULL,  -- equipment's last calibration date, required due to existing manual records, if no last calibration date or for new stuff, use GETDATE()
-    last_calib_month         AS MONTH(last_calib_date) PERSISTED,  -- equipment's last calibration month, same like last_calib_date but instead just get the month
-    next_calib_date          AS DATEADD(MONTH, calib_interval_months, last_calib_date) PERSISTED,  -- equipment's next calibration date, computed automatically from last_calib_date + calib_interval_months
-    next_calib_month         AS MONTH(DATEADD(MONTH, calib_interval_months, last_calib_date)) PERSISTED,  -- equipment's next calibration month, same like next_calib_date but instead just get the month
-    calib_type               CHAR(1) NOT NULL DEFAULT 'I',  -- calibration type maps to calibration type enum ('I' = internal, 'E' = external) in project.domain.enums, to indicate whether the equipment calibrated internally or externally
-    equipment_status         CHAR(1) NOT NULL DEFAULT 'A',  -- equipment's status maps to equipment status enum ('A' = active, 'O' = out for service, 'S' = scrapped) in project.domain.enums
-    remarks                  NVARCHAR(MAX) NULL,  -- additional remarks or notes about the equipment, can be null
-    created_at               DATETIME2 NOT NULL DEFAULT GETDATE(),  -- equipment's entry date, defaults to current date when the record is created
-    updated_at               DATETIME2 NULL,  -- equipment's last update, can be null, should be updated to whenever the record is updated
-    created_by               NVARCHAR(6) NOT NULL,  -- equipment's entry by, required to indicate who created the record, record the employee code (e.g., "525025", "220021", etc) of the creator
-    updated_by               NVARCHAR(6) NULL,  -- equipment's last update by, can be null, should be updated to whenever the record is updated, record the employee code (e.g., "525025", "220021", etc) of the person who updated the record
+    id                          INT IDENTITY PRIMARY KEY,
+    equipment_name              NVARCHAR(200) NOT NULL,  -- equipment's name, it will be heavily used across the system — especially in the app level for grouping identical equipment name and others
+    control_no                  NVARCHAR(100) NOT NULL UNIQUE,  -- equipment's control number, unique identifier for each equipment (e.g., "DC-XX", "EQ-001", "AS/MT/002", etc)
+    serial_no                   NVARCHAR(100) NULL,
+    brand                       NVARCHAR(100) NULL,
+    model                       NVARCHAR(100) NULL,
+    location                    NVARCHAR(200) NOT NULL,  -- equipment's location, choose from existing default locations table data through autocomplete or enter a custom one (e.g., "Dekat Blabla", etc)
+    section_id                  INT NOT NULL,  -- ref: sections.section_id; No-FK reference required to associate the equipment with a specific section in sections table
+    pic_id                      INT NOT NULL,  -- ref: Shared.dbo.employees.employee_id; cross-database No-FK reference intentionally omitted
+    pic_code                    NVARCHAR(6) NOT NULL,  -- denormalize: Shared.dbo.employees.employee_code; via pic_id > users > employees
+    pic_name                    NVARCHAR(200) NOT NULL,  -- denormalize: Shared.dbo.employees.employee_full_name; via pic_id > users > employees
+    calib_interval_months       INT NOT NULL,  -- equipment's calibration interval in months (i.e., 1 = monthly, 3 = every 3 months, 12 = yearly, 20 = every 20 months, etc)
+    last_calib_date             DATE NULL,  -- equipment's last calibration date, required for existing manual records, if no last calibration date or for new stuff then select 'No Record' in the front end, and this field may remain NULL
+    last_calib_month            AS MONTH(last_calib_date) PERSISTED,
+    last_calib_year             AS YEAR(last_calib_date) PERSISTED,
+    next_calib_date             AS DATEADD(MONTH, calib_interval_months, last_calib_date) PERSISTED,  -- equipment's next calibration date, computed automatically from last_calib_date + calib_interval_months
+    next_calib_month            AS MONTH(DATEADD(MONTH, calib_interval_months, last_calib_date)) PERSISTED,
+    next_calib_year             AS YEAR(DATEADD(MONTH, calib_interval_months, last_calib_date)) PERSISTED,
+    calib_type                  CHAR(1) NOT NULL DEFAULT 'I',  -- calibration type maps to calibration type enum (i.e., 'I' = internal, 'E' = external)
+    equipment_status            CHAR(1) NOT NULL DEFAULT 'A',  -- equipment's status maps to equipment status enum (i.e., 'A' = active, 'O' = out for service, 'S' = scrapped)
+    remarks                     NVARCHAR(MAX) NULL,
+    created_at                  DATETIME2 NOT NULL DEFAULT GETDATE(),
+    updated_at                  DATETIME2 NULL,
+    created_by                  NVARCHAR(6) NOT NULL,  -- ref: Shared.dbo.employees.employee_id; cross-database No-FK reference intentionally omitted, via logged in user > employees
+    updated_by                  NVARCHAR(6) NULL, -- ref: Shared.dbo.employees.employee_id; cross-database No-FK reference intentionally omitted, via logged in user > employees
 
-    CONSTRAINT CK_equipments_calib_type 
-        CHECK (calib_type IN ('I','E')),
-
-    CONSTRAINT CK_equipments_status 
-        CHECK (equipment_status IN ('A','O','S'))
+    CONSTRAINT CK_equipments_calib_type CHECK (calib_type IN ('I', 'E')),
+    CONSTRAINT CK_equipments_equipment_status CHECK (equipment_status IN ('A', 'O', 'S'))
 );
 GO
 
@@ -170,97 +147,71 @@ GO
 -- CALIBRATION APPROVERS
 -- =========================
 CREATE TABLE dbo.qa_calib_approvers (
-    id             INT IDENTITY PRIMARY KEY,
-    employee_id    INT NOT NULL,  -- ref: Shared.dbo.employees.employee_id
-    step_no        CHAR(1) NOT NULL,  -- approver's step_no maps to approval step enum ('1'=Prepared, '2'=Checked, '3'=Approved) in project.domain.enums
-    is_active      BIT NOT NULL DEFAULT 1,
-    created_at     DATETIME2 NOT NULL DEFAULT GETDATE(),  -- approver creation date, defaults to current date when the record is created
-    updated_at     DATETIME2 NULL,
-    created_by     NVARCHAR(6) NOT NULL,
-    updated_by     NVARCHAR(6) NULL,
+    id                  INT IDENTITY PRIMARY KEY,
+    approver_id         INT NOT NULL,  -- ref: users.user_id; No-FK reference required to associate the approver with a specific pic user in users table
+    approver_code       NVARCHAR(6) NOT NULL,  -- denormalize: Shared.dbo.employees.employee_code; via approver_id > users > employees
+    approver_name       NVARCHAR(200) NOT NULL,  -- denormalize: Shared.dbo.employees.employee_full_name; via approver_id > users > employees
+    step_no             CHAR(1) NOT NULL DEFAULT '4',  -- approver's step_no maps to approval step enum (i.e., '1' = prepared/preparer, '2' = checked/checker, '3' = approved/approver, '4' = none)
+    is_active           BIT NOT NULL DEFAULT 1,
+    created_at          DATETIME2 NOT NULL DEFAULT GETDATE(),
+    updated_at          DATETIME2 NULL,
+    created_by          NVARCHAR(6) NOT NULL,  -- ref: Shared.dbo.employees.employee_id; cross-database No-FK reference intentionally omitted, via logged in user > employees
+    updated_by          NVARCHAR(6) NULL,  -- ref: Shared.dbo.employees.employee_id; cross-database No-FK reference intentionally omitted, via logged in user > employees
 
-    CONSTRAINT CK_approvers_step_no
-        CHECK (step_no IN ('1','2','3')),
-
-    CONSTRAINT UQ_approvers_employee_step
-        UNIQUE (employee_id, step_no)
+    CONSTRAINT UQ_approvers_employee_step UNIQUE (approver_id, step_no),
+    CONSTRAINT CK_approvers_step_no CHECK (step_no IN ('1', '2', '3', '4'))
 );
 
 
 -- =========================
--- CALIBRATION (HEADER)
+-- CALIBRATION HEADER
 -- =========================
+-- Calibration phase maps to calibration phase enum (i.e., 'P' = plan, 'A' = actual) and their data just separate table
 CREATE TABLE dbo.qa_calib_main_headers (
-    id             INT IDENTITY PRIMARY KEY,
-    calib_no       NVARCHAR(100) NOT NULL UNIQUE,  -- calibration's identification number, unique identifier for each calibration record (e.g., "CALIB-2024-001", "CALIB-2024-002", etc)
-    calib_phase    CHAR(1) NOT NULL DEFAULT 'P',  -- calibration phase maps to calibration phase enum ('P' = plan, 'A' = actual) in project.domain.enums, to indicate whether the record is for planned calibration or actual calibration
-    calib_type     CHAR(1) NOT NULL,  -- calibration type maps to calibration type enum ('I' = internal, 'E' = external) in project.domain.enums, to indicate whether the calibration is planned to be internal or external
-    calib_month    INT NOT NULL,  -- calibration month (1-12), required to indicate the month of the calibration, should be between 1 and 12
-    calib_year     INT NOT NULL,  -- calibration year (e.g., 2024), required to indicate the year of the calibration
-    remarks        NVARCHAR(MAX) NULL,
-    created_at     DATETIME2 NOT NULL DEFAULT GETDATE(),  -- approver creation date, defaults to current date when the record is created
-    updated_at     DATETIME2 NULL,
-    created_by     NVARCHAR(6) NOT NULL,
-    updated_by     NVARCHAR(6) NULL,
+    id              INT IDENTITY PRIMARY KEY,
+    calib_no        NVARCHAR(100) NOT NULL UNIQUE,  -- calibration's identification number, unique identifier for each calibration record (e.g., "CALIB-2024-001", "CALIB-2024-002", etc)
+    calib_type      CHAR(1) NOT NULL,  -- calibration type maps to calibration type enum (i.e., 'I' = internal, 'E' = external)
+    remarks         NVARCHAR(MAX) NULL,
+    created_at      DATETIME2 NOT NULL DEFAULT GETDATE(),
+    updated_at      DATETIME2 NULL,
+    created_by      NVARCHAR(6) NOT NULL,  -- ref: Shared.dbo.employees.employee_id; cross-database No-FK reference intentionally omitted, via logged in user > employees
+    updated_by      NVARCHAR(6) NULL,  -- ref: Shared.dbo.employees.employee_id; cross-database No-FK reference intentionally omitted, via logged in user > employees
 
-    CONSTRAINT CK_headers_phase 
-        CHECK (calib_phase IN ('P','A')),
-
-    CONSTRAINT CK_plans_calib_type 
-        CHECK (calib_type IN ('I','E')),
-
-    CONSTRAINT CK_headers_calib_month
-        CHECK (calib_month >= 1 AND calib_month <= 12)
+    CONSTRAINT CK_main_headers_calib_type CHECK (calib_type IN ('I', 'E'))
 );
 
+
 -- =========================
--- CALIBRATION PLAN
+-- CALIBRATION PLANS
 -- =========================
 CREATE TABLE dbo.qa_calib_plans (
-    id              INT IDENTITY PRIMARY KEY,
-    header_id       INT NOT NULL,  -- ref: calibration main header id, cant be null, should reference to the qa_calib_main_headers table to link the plan to its main header
-    calib_status    CHAR(1) NOT NULL DEFAULT 'D',  -- calibration status maps to calibration status enum ('D' = draft, 'S' = submitted for approval, 'L' = locked) in project.domain.enums, to indicate the current status of the calibration plan
-    locked_at       DATETIME2 NULL,  -- lock date, can be null, should be updated to the date when the plan is locked (i.e., when the plan status is updated to 'L')
-    locked_by       NVARCHAR(6) NULL,  -- lock by, can be null, should be updated to the employee code (e.g., "525025", "220021", etc) of the person who locked the plan when the plan is locked (i.e., when the plan status is updated to 'L')
+    id                  INT IDENTITY PRIMARY KEY,
+    header_id           INT NOT NULL UNIQUE,  -- ref: qa_calib_main_headers.id; FK reference required to associate the calibration plan with a specific calibration header in qa_calib_main_headers table
+    calib_status        CHAR(1) NOT NULL DEFAULT 'D',  -- calibration status maps to calibration status enum (i.e., 'D' = draft, 'P' = prepared, 'C' = checked, 'A' = approved, 'L' = locked)
+    calib_month         INT NOT NULL,  -- calibration month, required to indicate the month of the calibration (i.e., between 1 and 12)
+    calib_year          INT NOT NULL,  -- calibration year, required to indicate the year of the calibration (e.g., 2020, 2024, etc)
+    locked_at           DATETIME2 NULL,  -- lock date, can be null, should be updated to the date when the plan is locked (i.e., when the plan status is updated to 'L')
+    locked_by           NVARCHAR(6) NULL,  -- ref: Shared.dbo.employees.employee_id; cross-database No-FK reference intentionally omitted, via logged in user > employees
     
-    CONSTRAINT FK_plans_header
-        FOREIGN KEY (header_id)
-        REFERENCES dbo.qa_calib_main_headers(id)
-        ON DELETE CASCADE,
-
-    CONSTRAINT UQ_plans_header UNIQUE (header_id),
-
-    CONSTRAINT CK_plans_status 
-        CHECK (calib_status IN ('D','S','L'))
+    CONSTRAINT FK_plans_header FOREIGN KEY (header_id) REFERENCES dbo.qa_calib_main_headers(id) ON DELETE CASCADE,
+    CONSTRAINT CK_plans_calib_month CHECK (calib_month BETWEEN 1 AND 12),
+    CONSTRAINT CK_plans_calib_year CHECK (calib_year BETWEEN 1900 AND 9999),
+    CONSTRAINT CK_plans_calib_status CHECK (calib_status IN ('D', 'S', 'L'))
 );
 
 
 -- =========================
--- CALIBRATION ACTUAL
+-- CALIBRATION ACTUALS
 -- =========================
 CREATE TABLE dbo.qa_calib_actuals (
-    id               INT IDENTITY PRIMARY KEY,
-    plan_id          INT NOT NULL,  -- ref: qa_calib_plans.id to enforce a single actual document per plan
-    header_id        INT NOT NULL,  -- ref: calibration main header id, cant be null, should reference to the qa_calib_main_headers table to link the actual calibration to its main header
-    calib_status     CHAR(1) NOT NULL DEFAULT 'G',  -- calibration status maps to calibration status enum ('G' = ongoing, 'X' = completed) in project.domain.enums, to indicate the current status of the actual calibration
-    completed_dt     DATETIME2 NULL,  -- completion date, can be null, should be updated to the date when the actual calibration is completed (i.e., when the actual calibration status is updated to 'X')
-    completed_by     NVARCHAR(6) NULL,  -- completion by, can be null, should be updated to the employee code (e.g., "525025", "220021", etc) of the person who completed the actual calibration when the actual calibration is completed (i.e., when the actual calibration status is updated to 'X')
+    id                  INT IDENTITY PRIMARY KEY,
+    header_id           INT NOT NULL UNIQUE,  -- ref: qa_calib_main_headers.id; FK reference required to associate the calibration actual with a specific calibration header in qa_calib_main_headers table
+    calib_status        CHAR(1) NOT NULL DEFAULT 'N',  -- calibration status maps to calibration status enum ('N' = not yet (plan is not locked yet), 'W' = wait (until planned calib_month), 'G' = ongoing, 'X' = completed)
+    completed_dt        DATETIME2 NULL,  -- completion date, can be null, should be updated to the date when the actual calibration is completed (i.e., when the actual calibration status is updated to 'X')
+    completed_by        NVARCHAR(6) NULL,  -- ref: Shared.dbo.employees.employee_id; cross-database No-FK reference intentionally omitted, via logged in user > employees
     
-    CONSTRAINT FK_actuals_plan
-        FOREIGN KEY (plan_id)
-        REFERENCES dbo.qa_calib_plans(id),
-
-    CONSTRAINT FK_actuals_header
-        FOREIGN KEY (header_id)
-        REFERENCES dbo.qa_calib_main_headers(id)
-        ON DELETE CASCADE,
-
-    CONSTRAINT UQ_actuals_plan UNIQUE (plan_id),
-
-    CONSTRAINT UQ_actuals_header UNIQUE (header_id),
-
-    CONSTRAINT CK_actuals_status 
-        CHECK (calib_status IN ('G','X'))
+    CONSTRAINT FK_actuals_header FOREIGN KEY (header_id) REFERENCES dbo.qa_calib_main_headers(id) ON DELETE CASCADE,
+    CONSTRAINT CK_actuals_calib_status CHECK (calib_status IN ('N', 'W', 'G', 'X'))
 );
 
 
@@ -268,28 +219,19 @@ CREATE TABLE dbo.qa_calib_actuals (
 -- CALIBRATION WORKERS
 -- =========================
 CREATE TABLE dbo.qa_calib_workers (
-    id                     INT IDENTITY PRIMARY KEY,
-    actual_id              INT NOT NULL,  -- ref: qa_calib_actuals.id — technicians belong to actual execution
-    employee_id            INT NULL,  -- ref: Shared.dbo.employees.employee_id
-    employee_code          NVARCHAR(6) NULL,  -- denormalized from Shared.dbo.employees.employee_code
-    employee_full_name     NVARCHAR(200) NULL,  -- denormalized from Shared.dbo.employees.full_name
-    external_party_name    NVARCHAR(200) NULL,  -- name of the external party (not in employees table), can be null if the technician is internal or if the name or company is unknown
-    is_pic                 BIT NOT NULL DEFAULT 0,  -- 1 = person-in-charge / lead technician
-    created_at             DATETIME2 NOT NULL DEFAULT GETDATE(),
-    created_by             NVARCHAR(6) NOT NULL,
+    id                          INT IDENTITY PRIMARY KEY,
+    header_id                   INT NOT NULL,  -- ref: qa_calib_main_headers.id; FK reference required to associate the calibration worker with a specific calibration header either plan/actual in qa_calib_main_headers table
+    worker_id                   INT NULL,  -- ref: users.user_id; No-FK reference required to associate the equipment with a specific worker user in users table if internal
+    worker_code                 NVARCHAR(6) NULL,  -- denormalize: Shared.dbo.employees.employee_code; via worker_id > users > employees if internal
+    worker_name                 NVARCHAR(200) NULL,  -- denormalize: Shared.dbo.employees.employee_full_name; via worker_id > users > employees if internal
+    external_party_name         NVARCHAR(200) NULL,  -- name of the external party (not in employees table) if external, can be null if the technician is internal or if the name is unknown
+    external_party_company      NVARCHAR(200) NULL,  -- name of the external party's company (not in employees table) if external, can be null if the technician is internal or if the name of company is unknown
+    is_pic                      BIT NOT NULL DEFAULT 0,
+    created_at                  DATETIME2 NOT NULL DEFAULT GETDATE(),
+    created_by                  NVARCHAR(6) NOT NULL,  -- ref: Shared.dbo.employees.employee_id; cross-database No-FK reference intentionally omitted, via logged in user > employees
  
-    CONSTRAINT FK_workers_actual
-        FOREIGN KEY (actual_id)
-        REFERENCES dbo.qa_calib_actuals(id)
-        ON DELETE CASCADE,
- 
-    -- Prevent duplicate worker entries for the same actual thru app level and selects
-    
-    CONSTRAINT CK_workers_identity
-    CHECK (
-        employee_code IS NOT NULL  -- internal worker
-        OR external_party_name IS NOT NULL  -- external worker
-    )
+    CONSTRAINT FK_workers_header FOREIGN KEY (header_id) REFERENCES dbo.qa_calib_main_headers(id) ON DELETE CASCADE,
+    CONSTRAINT CK_workers_identified CHECK (worker_id IS NOT NULL OR external_party_name IS NOT NULL)
 );
 GO
 
@@ -298,19 +240,19 @@ GO
 -- CALIBRATION APPROVALS
 -- =========================
 CREATE TABLE dbo.qa_calib_approvals (
-    id                    INT IDENTITY PRIMARY KEY,
-    header_id             INT NOT NULL,  -- ref: qa_calib_main_headers.id
-    step_no               CHAR(1) NOT NULL,  -- '1' = Prepared, '2' = Checked, '3' = Approved
-    employee_id           INT NULL,  -- ref: Shared.dbo.employees.employee_id
-    employee_code         NVARCHAR(6) NULL,  -- denormalized from Shared.dbo.employees.employee_code
-    employee_full_name    NVARCHAR(200) NULL,  -- denormalized from Shared.dbo.employees.full_name
-    action                CHAR(1) NOT NULL DEFAULT 'C',  -- 'C' = Cancel, 'S' = Submit
-    remarks               NVARCHAR(500) NULL,
-    actioned_at           DATETIME2 NULL,  -- when the approval action was taken
-    created_at            DATETIME2 NOT NULL DEFAULT GETDATE(),
-    created_by            NVARCHAR(6) NOT NULL,
-    updated_at            DATETIME2 NULL,
-    updated_by            NVARCHAR(6) NULL,
+    id                  INT IDENTITY PRIMARY KEY,
+    header_id           INT NOT NULL,  -- ref: qa_calib_main_headers.id
+    step_no             CHAR(1) NOT NULL,  -- '1', '2', '3'
+    approver_id         INT NOT NULL,  -- ref: users.user_id (who is assigned this step)
+    approver_code       NVARCHAR(6) NOT NULL,  -- denorm: employee_code
+    approver_name       NVARCHAR(200) NOT NULL,  -- denormalize: Shared.dbo.employees.employee_full_name; via worker_id > users > employees
+    action              CHAR(1) NOT NULL DEFAULT 'C',  -- calibration approval action maps to calibration approval action enum (i.e., 'C' = clear/cancel, 'S' = submit, 'R' = rejected)
+    remarks             NVARCHAR(500) NULL,
+    actioned_at         DATETIME2 NULL,  -- when the approval action was taken
+    created_at          DATETIME2 NOT NULL DEFAULT GETDATE(),
+    created_by          NVARCHAR(6) NOT NULL,
+    updated_at          DATETIME2 NULL,
+    updated_by          NVARCHAR(6) NULL,
  
     CONSTRAINT FK_approvals_header
         FOREIGN KEY (header_id)
@@ -329,7 +271,7 @@ CREATE TABLE dbo.qa_calib_approvals (
 
 
 -- =========================
--- CALIBRATION ITEMS
+-- CALIBRATION PLAN ITEMS
 -- =========================
 CREATE TABLE dbo.qa_calib_items (
     id                INT IDENTITY PRIMARY KEY,
@@ -417,3 +359,5 @@ CREATE TABLE dbo.qa_calib_equipment_details (
 
     CONSTRAINT UQ_equipmentsnapshots_detail UNIQUE (detail_id)
 );
+
+-- UNTIL HERE HELP ME PLEASE ON WHAT TO DO

@@ -1,22 +1,20 @@
 using FluentValidation;
-
 using Project.Application.Common;
 
 namespace Project.Application.DTOs;
 
-public sealed record LogInRequest(
+public sealed record LoginRequest(
     string Username,
     string Password
 );
 
-public sealed record RegRequest(
+public sealed record RegisterRequest(
     string EmployeeCode,
     string Username,
     string Email,
     string Password,
     string ConfirmPassword
 );
-
 
 public sealed record LoginResponse(
     string Token,
@@ -30,14 +28,13 @@ public sealed record LoginResponse(
     bool MustChangePassword
 );
 
-
 public sealed record ChangePasswordRequest(
     string CurrentPassword,
     string NewPassword,
     string ConfirmNewPassword
 );
 
-public sealed record ForgotPassRequest(
+public sealed record ForgotPasswordRequest(
     string Email
 );
 
@@ -52,26 +49,19 @@ public sealed record ResetPasswordWithTokenRequest(
     string ConfirmNewPassword
 );
 
-
 public sealed record RefreshTokenRequest(
     string RefreshToken
 );
-
 
 public sealed record RefreshTokenResponse(
     string Token,
     DateTime ExpiresAt
 );
 
-/// <summary>
-/// Response for GET /Auth/employee-by-code/{code}.
-/// Frontend expects fullName (or fullname/name) in the data.
-/// </summary>
 public sealed record EmployeeByCodeDto(
     string FullName,
     string Code
 );
-
 
 public sealed record UserDto(
     int UserId,
@@ -89,7 +79,6 @@ public sealed record UserDto(
     DateTime CreatedAt,
     DateTime? UpdatedAt
 );
-
 
 public sealed record UserSummaryDto(
     int UserId,
@@ -170,45 +159,38 @@ public sealed record UpdateMyProfileRequest(
     string Email
 );
 
-
-
 public static class UserConstants
 {
     public static readonly string[] Roles =
         ["SuperAdmin", "Admin", "Manager", "Employee"];
 }
 
-
-
-public sealed class LogInRequestValidator : AbstractValidator<LogInRequest>
+public sealed class LoginRequestValidator : AbstractValidator<LoginRequest>
 {
-    public LogInRequestValidator()
+    public LoginRequestValidator()
     {
         RuleFor(x => x.Username).NotEmpty().WithMessage("Username is required.");
         RuleFor(x => x.Password).NotEmpty().WithMessage("Password is required.");
     }
 }
 
-public sealed class RegRequestValidator : AbstractValidator<RegRequest>
+public sealed class RegisterRequestValidator : AbstractValidator<RegisterRequest>
 {
-    public RegRequestValidator()
+    public RegisterRequestValidator()
     {
         RuleFor(x => x.Username)
             .NotEmpty().WithMessage("Username is required.")
             .MaximumLength(100).WithMessage("Username cannot exceed 100 characters.");
-
         RuleFor(x => x.Email)
             .NotEmpty().WithMessage("Email is required.")
             .EmailAddress().WithMessage("A valid email address is required.")
             .MaximumLength(200).WithMessage("Email cannot exceed 200 characters.");
-
         RuleFor(x => x.Password)
             .NotEmpty().WithMessage("Password is required.")
             .MinimumLength(8).WithMessage("Password must be at least 8 characters.")
             .Matches(@"[A-Z]").WithMessage("Password must contain at least one uppercase letter.")
             .Matches(@"[a-z]").WithMessage("Password must contain at least one lowercase letter.")
             .Matches(@"[0-9]").WithMessage("Password must contain at least one digit.");
-
         RuleFor(x => x.ConfirmPassword)
             .Equal(x => x.Password).WithMessage("Passwords do not match.");
     }
@@ -219,22 +201,20 @@ public sealed class ChangePasswordRequestValidator : AbstractValidator<ChangePas
     public ChangePasswordRequestValidator()
     {
         RuleFor(x => x.CurrentPassword).NotEmpty().WithMessage("Current password is required.");
-
         RuleFor(x => x.NewPassword)
             .NotEmpty().WithMessage("New password is required.")
             .MinimumLength(8).WithMessage("Password must be at least 8 characters.")
             .Matches(@"[A-Z]").WithMessage("Password must contain at least one uppercase letter.")
             .Matches(@"[a-z]").WithMessage("Password must contain at least one lowercase letter.")
             .Matches(@"[0-9]").WithMessage("Password must contain at least one digit.");
-
         RuleFor(x => x.ConfirmNewPassword)
             .Equal(x => x.NewPassword).WithMessage("Passwords do not match.");
     }
 }
 
-public sealed class ForgotPassRequestValidator : AbstractValidator<ForgotPassRequest>
+public sealed class ForgotPasswordRequestValidator : AbstractValidator<ForgotPasswordRequest>
 {
-    public ForgotPassRequestValidator()
+    public ForgotPasswordRequestValidator()
     {
         RuleFor(x => x.Email)
             .NotEmpty().WithMessage("Email is required.")
@@ -248,19 +228,16 @@ public sealed class ResetPasswordByTokenRequestValidator : AbstractValidator<Res
     public ResetPasswordByTokenRequestValidator()
     {
         RuleFor(x => x.Token).NotEmpty().WithMessage("Reset token is required.");
-
         RuleFor(x => x.Email)
             .NotEmpty().WithMessage("Email is required.")
             .EmailAddress().WithMessage("A valid email address is required.")
             .MaximumLength(200).WithMessage("Email cannot exceed 200 characters.");
-
         RuleFor(x => x.NewPassword)
             .NotEmpty().WithMessage("New password is required.")
             .MinimumLength(8).WithMessage("Password must be at least 8 characters.")
             .Matches(@"[A-Z]").WithMessage("Password must contain at least one uppercase letter.")
             .Matches(@"[a-z]").WithMessage("Password must contain at least one lowercase letter.")
             .Matches(@"[0-9]").WithMessage("Password must contain at least one digit.");
-
         RuleFor(x => x.ConfirmNewPassword)
             .Equal(x => x.NewPassword).WithMessage("Passwords do not match.");
     }
@@ -273,28 +250,23 @@ public sealed class CreateUserRequestValidator : AbstractValidator<CreateUserReq
         RuleFor(x => x.Username)
             .NotEmpty().WithMessage("Username is required.")
             .MaximumLength(100).WithMessage("Username cannot exceed 100 characters.");
-
         RuleFor(x => x.Email)
             .NotEmpty().WithMessage("Email is required.")
             .EmailAddress().WithMessage("A valid email address is required.")
             .MaximumLength(200).WithMessage("Email cannot exceed 200 characters.");
-
         RuleFor(x => x.Password)
             .NotEmpty().WithMessage("Password is required.")
             .MinimumLength(8).WithMessage("Password must be at least 8 characters.")
             .Matches(@"[A-Z]").WithMessage("Password must contain at least one uppercase letter.")
             .Matches(@"[a-z]").WithMessage("Password must contain at least one lowercase letter.")
             .Matches(@"[0-9]").WithMessage("Password must contain at least one digit.");
-
         RuleFor(x => x.Role)
             .NotEmpty()
             .Must(r => UserConstants.Roles.Contains(r))
             .WithMessage($"Role must be one of: {string.Join(", ", UserConstants.Roles)}.");
-
         RuleFor(x => x.EmployeeId)
             .GreaterThan(0).When(x => x.EmployeeId.HasValue)
             .WithMessage("EmployeeId must be a positive integer.");
-
         RuleFor(x => x.EmployeeCode)
             .MaximumLength(6).When(x => !string.IsNullOrWhiteSpace(x.EmployeeCode))
             .WithMessage("Employee code must be up to 6 characters.")
@@ -310,21 +282,17 @@ public sealed class UpdateUserRequestValidator : AbstractValidator<UpdateUserReq
         RuleFor(x => x.Username)
             .NotEmpty().WithMessage("Username is required.")
             .MaximumLength(100).WithMessage("Username cannot exceed 100 characters.");
-
         RuleFor(x => x.Email)
             .NotEmpty().WithMessage("Email is required.")
             .EmailAddress().WithMessage("A valid email address is required.")
             .MaximumLength(200).WithMessage("Email cannot exceed 200 characters.");
-
         RuleFor(x => x.Role)
             .NotEmpty()
             .Must(r => UserConstants.Roles.Contains(r))
             .WithMessage($"Role must be one of: {string.Join(", ", UserConstants.Roles)}.");
-
         RuleFor(x => x.EmployeeId)
             .GreaterThan(0).When(x => x.EmployeeId.HasValue)
             .WithMessage("EmployeeId must be a positive integer.");
-
         RuleFor(x => x.EmployeeCode)
             .MaximumLength(6).When(x => !string.IsNullOrWhiteSpace(x.EmployeeCode))
             .WithMessage("Employee code must be up to 6 characters.")
@@ -353,7 +321,6 @@ public sealed class UpdateMyProfileRequestValidator : AbstractValidator<UpdateMy
         RuleFor(x => x.Username)
             .NotEmpty().WithMessage("Username is required.")
             .MaximumLength(100).WithMessage("Username cannot exceed 100 characters.");
-
         RuleFor(x => x.Email)
             .NotEmpty().WithMessage("Email is required.")
             .EmailAddress().WithMessage("A valid email address is required.")

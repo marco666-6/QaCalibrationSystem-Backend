@@ -3,17 +3,14 @@ using Project.Application.DTOs;
 
 namespace Project.Application.Interfaces;
 
-
 public interface IAuthService
 {
-    Task<ApiResponse<LoginResponse>> LoginAsync(LogInRequest request);
-    Task<ApiResponse<LoginResponse>> RegisterAsync(RegRequest request);
+    Task<ApiResponse<LoginResponse>> LoginAsync(LoginRequest request);
+    Task<ApiResponse<LoginResponse>> RegisterAsync(RegisterRequest request);
     Task<ApiResponse<EmployeeByCodeDto>> GetEmployeeByCodeAsync(string code);
-    Task<ApiResponse<ForgotPasswordResponse>> ForgotPasswordAsync(ForgotPassRequest request);
+    Task<ApiResponse<ForgotPasswordResponse>> ForgotPasswordAsync(ForgotPasswordRequest request);
     Task<ApiResponse> ResetPasswordAsync(ResetPasswordWithTokenRequest request);
-
     Task<ApiResponse> ChangePasswordAsync(int userId, ChangePasswordRequest request);
-
     Task<ApiResponse<RefreshTokenResponse>> RefreshTokenAsync(RefreshTokenRequest request);
 }
 

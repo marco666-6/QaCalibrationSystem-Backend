@@ -1,9 +1,8 @@
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Identity.Data;
-using Microsoft.AspNetCore.Mvc;
 using Project.Application.Common;
 using Project.Application.DTOs;
 using Project.Application.Interfaces;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 
 namespace Project.Api.Controllers;
@@ -31,7 +30,7 @@ public sealed class AuthController : ControllerBase
     [ProducesResponseType(typeof(ApiResponse<LoginResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<LoginResponse>), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ApiResponse<LoginResponse>), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> Login([FromBody] LogInRequest request)
+    public async Task<IActionResult> Login([FromBody] LoginRequest request)
     {
         var result = await _authService.LoginAsync(request);
 
@@ -48,7 +47,7 @@ public sealed class AuthController : ControllerBase
     [ProducesResponseType(typeof(ApiResponse<LoginResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<LoginResponse>), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ApiResponse<LoginResponse>), StatusCodes.Status409Conflict)]
-    public async Task<IActionResult> Register([FromBody] RegRequest request)
+    public async Task<IActionResult> Register([FromBody] RegisterRequest request)
     {
         var result = await _authService.RegisterAsync(request);
 
@@ -86,7 +85,7 @@ public sealed class AuthController : ControllerBase
     [AllowAnonymous]
     [ProducesResponseType(typeof(ApiResponse<ForgotPasswordResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<ForgotPasswordResponse>), StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> ForgotPassword([FromBody] ForgotPassRequest request)
+    public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request)
     {
         var result = await _authService.ForgotPasswordAsync(request);
         return result.Success ? Ok(result) : BadRequest(result);

@@ -15,10 +15,10 @@ public sealed class AuthService : IAuthService
 {
     private readonly IUserRepository _userRepo;
     private readonly IJwtTokenService _jwtService;
-    private readonly IValidator<LogInRequest> _loginValidator;
-    private readonly IValidator<RegRequest> _registerValidator;
+    private readonly IValidator<LoginRequest> _loginValidator;
+    private readonly IValidator<RegisterRequest> _registerValidator;
     private readonly IValidator<ChangePasswordRequest> _passwordValidator;
-    private readonly IValidator<ForgotPassRequest> _forgotPasswordValidator;
+    private readonly IValidator<ForgotPasswordRequest> _forgotPasswordValidator;
     private readonly IValidator<ResetPasswordWithTokenRequest> _resetPasswordValidator;
     private readonly EmailNotificationSettings _notificationSettings;
     private readonly ILogger<AuthService> _logger;
@@ -30,10 +30,10 @@ public sealed class AuthService : IAuthService
     public AuthService(
         IUserRepository userRepo,
         IJwtTokenService jwtService,
-        IValidator<LogInRequest> loginValidator,
-        IValidator<RegRequest> registerValidator,
+        IValidator<LoginRequest> loginValidator,
+        IValidator<RegisterRequest> registerValidator,
         IValidator<ChangePasswordRequest> passwordValidator,
-        IValidator<ForgotPassRequest> forgotPasswordValidator,
+        IValidator<ForgotPasswordRequest> forgotPasswordValidator,
         IValidator<ResetPasswordWithTokenRequest> resetPasswordValidator,
         IOptions<EmailNotificationSettings> notificationSettings,
         ILogger<AuthService> logger)
@@ -49,7 +49,7 @@ public sealed class AuthService : IAuthService
         _logger = logger;
     }
 
-    public async Task<ApiResponse<LoginResponse>> LoginAsync(LogInRequest request)
+    public async Task<ApiResponse<LoginResponse>> LoginAsync(LoginRequest request)
     {
         var validation = await _loginValidator.ValidateAsync(request);
         if (!validation.IsValid)
@@ -107,7 +107,7 @@ public sealed class AuthService : IAuthService
         return await BuildLoginResponseAsync(user, request.Username);
     }
 
-    public async Task<ApiResponse<LoginResponse>> RegisterAsync(RegRequest request)
+    public async Task<ApiResponse<LoginResponse>> RegisterAsync(RegisterRequest request)
     {
         var validation = await _registerValidator.ValidateAsync(request);
         if (!validation.IsValid)
@@ -169,7 +169,7 @@ public sealed class AuthService : IAuthService
         return ApiResponse<EmployeeByCodeDto>.Ok(employee);
     }
 
-    public async Task<ApiResponse<ForgotPasswordResponse>> ForgotPasswordAsync(ForgotPassRequest request)
+    public async Task<ApiResponse<ForgotPasswordResponse>> ForgotPasswordAsync(ForgotPasswordRequest request)
     {
         var validation = await _forgotPasswordValidator.ValidateAsync(request);
         if (!validation.IsValid)
