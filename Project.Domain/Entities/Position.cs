@@ -11,8 +11,8 @@ namespace Project.Domain.Entities
         public int PositionId { get; set; }
         public string PositionCode { get; set; } = string.Empty;
         public string PositionName { get; set; } = string.Empty;
-        public bool IsActive { get; set; }
-        public DateTime CreatedAt { get; set; }
+        public bool IsActive { get; set; } = true;
+        public DateTime CreatedAt { get; set; } = DateTime.Now;
         public DateTime? UpdatedAt { get; set; }
     }
 }

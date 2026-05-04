@@ -16,8 +16,8 @@ public class User
     public bool MustChangePassword { get; set; } = true;
     public string? RefreshToken { get; set; }
     public DateTime? RefreshTokenExpiresAt { get; set; }
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime CreatedAt { get; set; } = DateTime.Now;
     public DateTime? UpdatedAt { get; set; }
     public Employee? Employee { get; set; }
-    public bool IsLockedOut => LockoutUntil.HasValue && LockoutUntil.Value > DateTime.UtcNow;
+    public bool IsLockedOut => LockoutUntil.HasValue && LockoutUntil.Value > DateTime.Now;
 }

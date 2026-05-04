@@ -27,7 +27,10 @@ public static class ServiceCollectionExtensions
         DapperTypeMapRegistrar.Register(
             typeof(Employee),
             typeof(User),
-            typeof(PasswordResetToken)
+            typeof(PasswordResetToken),
+            typeof(DefaultLocation),
+            typeof(Section),
+            typeof(Position)
         );
 
         SqlMapper.AddTypeHandler(new DateOnlyTypeHandler());
@@ -35,6 +38,9 @@ public static class ServiceCollectionExtensions
 
         services.AddScoped<IDbConnectionFactory, DbConnectionFactory>();
         services.AddScoped<IUserRepository, UserRepository>();
+        services.AddScoped<IDefaultLocationRepository, DefaultLocationRepository>();
+        services.AddScoped<ISectionRepository, SectionRepository>();
+        services.AddScoped<IPositionRepository, PositionRepository>();
         return services;
     }
 
@@ -43,6 +49,9 @@ public static class ServiceCollectionExtensions
     {
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IUserService, UserService>();
+        services.AddScoped<IDefaultLocationService, DefaultLocationService>();
+        services.AddScoped<ISectionService, SectionService>();
+        services.AddScoped<IPositionService, PositionService>();
         services.AddScoped<IJwtTokenService, JwtTokenService>();
         
         services.AddValidatorsFromAssemblyContaining<CreateUserRequestValidator>();

@@ -100,7 +100,7 @@ public sealed class UserService : IUserService
             Role = request.Role,
             MustChangePassword = request.MustChangePassword,
             IsActive = true,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.Now
         };
 
         var newId = await _userRepo.CreateAsync(entity);
@@ -159,7 +159,7 @@ public sealed class UserService : IUserService
         existing.Role = request.Role;
         existing.IsActive = request.IsActive;
         existing.MustChangePassword = request.MustChangePassword;
-        existing.UpdatedAt = DateTime.UtcNow;
+        existing.UpdatedAt = DateTime.Now;
 
         await _userRepo.UpdateAsync(existing);
 
@@ -200,7 +200,7 @@ public sealed class UserService : IUserService
 
         existing.Username = request.Username.Trim();
         existing.Email = request.Email.Trim().ToLowerInvariant();
-        existing.UpdatedAt = DateTime.UtcNow;
+        existing.UpdatedAt = DateTime.Now;
 
         await _userRepo.UpdateAsync(existing);
 
@@ -233,7 +233,7 @@ public sealed class UserService : IUserService
         if (request.MustChangePassword)
         {
             user.MustChangePassword = true;
-            user.UpdatedAt = DateTime.UtcNow;
+            user.UpdatedAt = DateTime.Now;
             await _userRepo.UpdateAsync(user);
         }
 

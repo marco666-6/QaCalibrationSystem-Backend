@@ -45,7 +45,7 @@ public sealed class JwtTokenService : IJwtTokenService
             issuer: _jwtSettings.Issuer,
             audience: _jwtSettings.Audience,
             claims: claims,
-            expires: DateTime.UtcNow.AddMinutes(_jwtSettings.ExpirationMinutes),
+            expires: DateTime.Now.AddMinutes(_jwtSettings.ExpirationMinutes),
             signingCredentials: CreateSigningCredentials()
         );
 
@@ -75,7 +75,7 @@ public sealed class JwtTokenService : IJwtTokenService
             issuer: _jwtSettings.Issuer,
             audience: _jwtSettings.Audience,
             claims: claims,
-            expires: DateTime.UtcNow.Add(lifetime),
+            expires: DateTime.Now.Add(lifetime),
             signingCredentials: CreateSigningCredentials()
         );
 

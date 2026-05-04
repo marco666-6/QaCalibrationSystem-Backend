@@ -6,6 +6,6 @@ public sealed class PasswordResetToken
     public int UserId { get; set; }
     public string Token { get; set; } = string.Empty;
     public DateTime ExpiresAt { get; set; }
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime CreatedAt { get; set; } = DateTime.Now;
     public DateTime? ConsumedAt { get; set; }
 }

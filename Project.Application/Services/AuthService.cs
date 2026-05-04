@@ -72,7 +72,7 @@ public sealed class AuthService : IAuthService
 
         if (user.IsLockedOut)
         {
-            var remainingMinutes = (int)(user.LockoutUntil!.Value - DateTime.UtcNow).TotalMinutes;
+            var remainingMinutes = (int)(user.LockoutUntil!.Value - DateTime.Now).TotalMinutes;
             _logger.LogWarning("Login failed: User '{Username}' is locked out", request.Username);
             return ApiResponse<LoginResponse>.Fail(
                 $"Account is temporarily locked. Try again in {remainingMinutes} minutes.");
@@ -86,7 +86,7 @@ public sealed class AuthService : IAuthService
             {
                 await _userRepo.LockAccountAsync(
                     user.UserId,
-                    DateTime.UtcNow.AddMinutes(LockoutMinutes));
+                    DateTime.Now.AddMinutes(LockoutMinutes));
 
                 _logger.LogWarning(
                     "User '{Username}' locked after {Attempts} failed login attempts",
@@ -130,7 +130,7 @@ public sealed class AuthService : IAuthService
             Role = "Employee",
             IsActive = true,
             MustChangePassword = false,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.Now
         };
 
         try
@@ -189,7 +189,7 @@ public sealed class AuthService : IAuthService
         }
 
         var tokenValue = Guid.NewGuid().ToString("N");
-        var expiresAt = DateTime.UtcNow.Add(PasswordResetTokenLifetime);
+        var expiresAt = DateTime.Now.Add(PasswordResetTokenLifetime);
 
         await _userRepo.InvalidatePasswordResetTokensAsync(user.UserId);
         await _userRepo.CreatePasswordResetTokenAsync(new PasswordResetToken
@@ -197,7 +197,7 @@ public sealed class AuthService : IAuthService
             UserId = user.UserId,
             Token = tokenValue,
             ExpiresAt = expiresAt,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.Now
         });
 
         var resetUrl = BuildResetUrl(tokenValue, user.Email);
@@ -236,7 +236,7 @@ public sealed class AuthService : IAuthService
         var newHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
         await _userRepo.UpdatePasswordAsync(user.UserId, newHash);
         await _userRepo.ResetFailedLoginAttemptsAsync(user.UserId);
-        await _userRepo.ConsumePasswordResetTokenAsync(resetToken.Id, DateTime.UtcNow);
+        await _userRepo.ConsumePasswordResetTokenAsync(resetToken.Id, DateTime.Now);
         await _userRepo.InvalidatePasswordResetTokensAsync(user.UserId);
 
         _logger.LogInformation("Password reset completed for user ID {UserId}", user.UserId);
@@ -284,7 +284,7 @@ public sealed class AuthService : IAuthService
         }
 
         var token = _jwtService.GenerateToken(user);
-        var expiresAt = DateTime.UtcNow.AddMinutes(60);
+        var expiresAt = DateTime.Now.AddMinutes(60);
 
         _logger.LogInformation("User ID {UserId} refreshed token", user.UserId);
 
@@ -294,10 +294,10 @@ public sealed class AuthService : IAuthService
     private async Task<ApiResponse<LoginResponse>> BuildLoginResponseAsync(User user, string usernameForLog)
     {
         var token = _jwtService.GenerateToken(user);
-        var expiresAt = DateTime.UtcNow.AddMinutes(60);
+        var expiresAt = DateTime.Now.AddMinutes(60);
 
         var refreshToken = _jwtService.GenerateRefreshToken();
-        var refreshTokenExpiresAt = DateTime.UtcNow.AddDays(7);
+        var refreshTokenExpiresAt = DateTime.Now.AddDays(7);
         await _userRepo.StoreRefreshTokenAsync(user.UserId, refreshToken, refreshTokenExpiresAt);
 
         _logger.LogInformation("User '{Username}' authenticated successfully", usernameForLog);

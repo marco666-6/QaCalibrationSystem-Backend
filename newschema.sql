@@ -52,9 +52,9 @@ GO
 -- ============================
 -- DEFAULT LOCATIONS
 -- ============================
-CREATE TABLE dbo.def_locations (
-    def_location_id         INT IDENTITY PRIMARY KEY,
-    def_location_name       NVARCHAR(200) NOT NULL,
+CREATE TABLE dbo.default_locations (
+    default_location_id         INT IDENTITY PRIMARY KEY,
+    default_location_name       NVARCHAR(200) NOT NULL,
     is_active               BIT NOT NULL DEFAULT 1,
     created_at              DATETIME2 NOT NULL DEFAULT GETDATE(),
     updated_at              DATETIME2 NULL
@@ -110,7 +110,7 @@ GO
 -- ============================
 -- CALIBRATION EQUIPMENTS
 -- ============================
-CREATE TABLE dbo.qa_calib_equipments (
+CREATE TABLE dbo.equipments (
     id                          INT IDENTITY PRIMARY KEY,
     equipment_name              NVARCHAR(200) NOT NULL,  -- equipment's name, it will be heavily used across the system — especially in the app level for grouping identical equipment name and others
     control_no                  NVARCHAR(100) NOT NULL UNIQUE,  -- equipment's control number, unique identifier for each equipment (e.g., "DC-XX", "EQ-001", "AS/MT/002", etc)
@@ -305,7 +305,7 @@ CREATE TABLE dbo.qa_calib_items (
 CREATE TABLE dbo.qa_calib_item_details (
     id              INT IDENTITY PRIMARY KEY,
     item_id         INT NOT NULL,  -- ref: qa_calib_items.id (the group this unit belongs to)
-    equipment_id    INT NOT NULL,  -- ref: qa_calib_equipments.id (specific equipment unit)
+    equipment_id    INT NOT NULL,  -- ref: equipments.id (specific equipment unit)
     calib_result    CHAR(1) NULL,  -- 'O' = OK, 'N' = NG, NULL = not yet done
     overdue_flag    BIT NOT NULL DEFAULT 0,  -- 1 = this equipment was past its next_calib_month when calibrated
     certificate_no  NVARCHAR(100) NULL,  -- external calibration certificate number (null for internal and possibly null/optional for external if not yet available)

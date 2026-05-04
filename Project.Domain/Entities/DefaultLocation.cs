@@ -6,11 +6,10 @@ using System.Threading.Tasks;
 
 namespace Project.Domain.Entities
 {
-    public class Section
+    public class DefaultLocation
     {
-        public int SectionId { get; set; }
-        public string SectionCode { get; set; } = string.Empty;
-        public string SectionName { get; set; } = string.Empty;
+        public int DefaultLocationId { get; set; }
+        public string DefaultLocationName { get; set; } = string.Empty;
         public bool IsActive { get; set; } = true;
         public DateTime CreatedAt { get; set; } = DateTime.Now;
         public DateTime? UpdatedAt { get; set; }

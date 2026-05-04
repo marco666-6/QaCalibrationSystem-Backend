@@ -58,7 +58,7 @@ public sealed class UserRepository : BaseRepository<User>, IUserRepository
             WHERE user_id = @UserId
             """;
 
-        await ExecuteAsync(sql, new { UserId = userId, Now = DateTime.UtcNow });
+        await ExecuteAsync(sql, new { UserId = userId, Now = DateTime.Now });
     }
 
     public async Task IncrementFailedLoginAttemptsAsync(int userId)
@@ -111,7 +111,7 @@ public sealed class UserRepository : BaseRepository<User>, IUserRepository
     public async Task<User?> GetByRefreshTokenAsync(string refreshToken)
     {
         var sql = $"{BaseSelect} WHERE u.refresh_token = @RefreshToken AND u.refresh_token_expires_at > @Now";
-        var results = await QueryWithEmployeeAsync(sql, new { RefreshToken = refreshToken, Now = DateTime.UtcNow });
+        var results = await QueryWithEmployeeAsync(sql, new { RefreshToken = refreshToken, Now = DateTime.Now });
         return results.SingleOrDefault();
     }
 
@@ -166,7 +166,7 @@ public sealed class UserRepository : BaseRepository<User>, IUserRepository
         using var connection = _connectionFactory.CreateConnection();
         return await connection.ExecuteScalarAsync<int?>(
             upsertEmployeeSql,
-            new { EmployeeCode = employeeCode, CreatedAt = DateTime.UtcNow, Email = email });
+            new { EmployeeCode = employeeCode, CreatedAt = DateTime.Now, Email = email });
     }
 
     public async Task CreatePasswordResetTokenAsync(PasswordResetToken token)
@@ -218,7 +218,7 @@ public sealed class UserRepository : BaseRepository<User>, IUserRepository
         return await connection.QuerySingleOrDefaultAsync<PasswordResetToken>(sql, new
         {
             Token = token,
-            Now = DateTime.UtcNow
+            Now = DateTime.Now
         });
     }
 
@@ -234,7 +234,7 @@ public sealed class UserRepository : BaseRepository<User>, IUserRepository
         await ExecuteAsync(sql, new
         {
             UserId = userId,
-            Now = DateTime.UtcNow
+            Now = DateTime.Now
         });
     }
 
@@ -464,7 +464,7 @@ public sealed class UserRepository : BaseRepository<User>, IUserRepository
         {
             UserId = userId,
             PasswordHash = newPasswordHash,
-            UpdatedAt = DateTime.UtcNow
+            UpdatedAt = DateTime.Now
         });
 
         return affected > 0;
@@ -482,7 +482,7 @@ public sealed class UserRepository : BaseRepository<User>, IUserRepository
         var affected = await ExecuteAsync(sql, new
         {
             UserId = userId,
-            UpdatedAt = DateTime.UtcNow
+            UpdatedAt = DateTime.Now
         });
 
         return affected > 0;
