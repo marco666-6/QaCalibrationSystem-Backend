@@ -125,6 +125,24 @@ public sealed class PositionRepository : BaseRepository<Position>, IPositionRepo
         return await connection.QuerySingleOrDefaultAsync<Position>(sql, new { PositionId = positionId });
     }
 
+    public async Task<IEnumerable<Position>> GetByIdsAsync(IEnumerable<int> positionIds)
+    {
+        const string sql = """
+            SELECT
+                position_id,
+                position_code,
+                position_name,
+                is_active,
+                created_at,
+                updated_at
+            FROM positions
+            WHERE position_id IN @PositionIds
+            """;
+
+        using var connection = _connectionFactory.CreateConnection();
+        return await connection.QueryAsync<Position>(sql, new { PositionIds = positionIds.ToArray() });
+    }
+
     public async Task<bool> CodeExistsAsync(string positionCode, int? excludePositionId = null)
     {
         const string sql = """
@@ -142,6 +160,18 @@ public sealed class PositionRepository : BaseRepository<Position>, IPositionRepo
         });
 
         return count > 0;
+    }
+
+    public async Task<IEnumerable<string>> GetExistingCodesAsync(IEnumerable<string> positionCodes)
+    {
+        const string sql = """
+            SELECT position_code
+            FROM positions
+            WHERE position_code IN @PositionCodes
+            """;
+
+        using var connection = _connectionFactory.CreateConnection();
+        return await connection.QueryAsync<string>(sql, new { PositionCodes = positionCodes.ToArray() });
     }
 
     public async Task<int> CreateAsync(Position entity)
@@ -163,6 +193,44 @@ public sealed class PositionRepository : BaseRepository<Position>, IPositionRepo
 
         using var connection = _connectionFactory.CreateConnection();
         return await connection.ExecuteScalarAsync<int>(sql, entity);
+    }
+
+    public async Task<IReadOnlyCollection<int>> CreateManyAsync(IEnumerable<Position> entities)
+    {
+        const string sql = """
+            INSERT INTO positions (
+                position_code,
+                position_name,
+                is_active,
+                created_at
+            ) VALUES (
+                @PositionCode,
+                @PositionName,
+                @IsActive,
+                @CreatedAt
+            );
+            SELECT CAST(SCOPE_IDENTITY() AS INT);
+            """;
+
+        using var connection = _connectionFactory.CreateConnection();
+        using var transaction = connection.BeginTransaction();
+        try
+        {
+            var createdIds = new List<int>();
+            foreach (var entity in entities)
+            {
+                var newId = await connection.ExecuteScalarAsync<int>(sql, entity, transaction);
+                createdIds.Add(newId);
+            }
+
+            transaction.Commit();
+            return createdIds;
+        }
+        catch
+        {
+            transaction.Rollback();
+            throw;
+        }
     }
 
     public async Task<bool> UpdateAsync(Position entity)
@@ -196,5 +264,22 @@ public sealed class PositionRepository : BaseRepository<Position>, IPositionRepo
         });
 
         return affected > 0;
+    }
+
+    public async Task<int> SoftDeleteManyAsync(IEnumerable<int> positionIds)
+    {
+        const string sql = """
+            UPDATE positions
+            SET is_active = 0,
+                updated_at = @UpdatedAt
+            WHERE position_id IN @PositionIds
+            """;
+
+        using var connection = _connectionFactory.CreateConnection();
+        return await connection.ExecuteAsync(sql, new
+        {
+            PositionIds = positionIds.ToArray(),
+            UpdatedAt = DateTime.Now
+        });
     }
 }

@@ -125,6 +125,24 @@ public sealed class SectionRepository : BaseRepository<Section>, ISectionReposit
         return await connection.QuerySingleOrDefaultAsync<Section>(sql, new { SectionId = sectionId });
     }
 
+    public async Task<IEnumerable<Section>> GetByIdsAsync(IEnumerable<int> sectionIds)
+    {
+        const string sql = """
+            SELECT
+                section_id,
+                section_code,
+                section_name,
+                is_active,
+                created_at,
+                updated_at
+            FROM sections
+            WHERE section_id IN @SectionIds
+            """;
+
+        using var connection = _connectionFactory.CreateConnection();
+        return await connection.QueryAsync<Section>(sql, new { SectionIds = sectionIds.ToArray() });
+    }
+
     public async Task<bool> CodeExistsAsync(string sectionCode, int? excludeSectionId = null)
     {
         const string sql = """
@@ -142,6 +160,18 @@ public sealed class SectionRepository : BaseRepository<Section>, ISectionReposit
         });
 
         return count > 0;
+    }
+
+    public async Task<IEnumerable<string>> GetExistingCodesAsync(IEnumerable<string> sectionCodes)
+    {
+        const string sql = """
+            SELECT section_code
+            FROM sections
+            WHERE section_code IN @SectionCodes
+            """;
+
+        using var connection = _connectionFactory.CreateConnection();
+        return await connection.QueryAsync<string>(sql, new { SectionCodes = sectionCodes.ToArray() });
     }
 
     public async Task<int> CreateAsync(Section entity)
@@ -163,6 +193,44 @@ public sealed class SectionRepository : BaseRepository<Section>, ISectionReposit
 
         using var connection = _connectionFactory.CreateConnection();
         return await connection.ExecuteScalarAsync<int>(sql, entity);
+    }
+
+    public async Task<IReadOnlyCollection<int>> CreateManyAsync(IEnumerable<Section> entities)
+    {
+        const string sql = """
+            INSERT INTO sections (
+                section_code,
+                section_name,
+                is_active,
+                created_at
+            ) VALUES (
+                @SectionCode,
+                @SectionName,
+                @IsActive,
+                @CreatedAt
+            );
+            SELECT CAST(SCOPE_IDENTITY() AS INT);
+            """;
+
+        using var connection = _connectionFactory.CreateConnection();
+        using var transaction = connection.BeginTransaction();
+        try
+        {
+            var createdIds = new List<int>();
+            foreach (var entity in entities)
+            {
+                var newId = await connection.ExecuteScalarAsync<int>(sql, entity, transaction);
+                createdIds.Add(newId);
+            }
+
+            transaction.Commit();
+            return createdIds;
+        }
+        catch
+        {
+            transaction.Rollback();
+            throw;
+        }
     }
 
     public async Task<bool> UpdateAsync(Section entity)
@@ -196,5 +264,22 @@ public sealed class SectionRepository : BaseRepository<Section>, ISectionReposit
         });
 
         return affected > 0;
+    }
+
+    public async Task<int> SoftDeleteManyAsync(IEnumerable<int> sectionIds)
+    {
+        const string sql = """
+            UPDATE sections
+            SET is_active = 0,
+                updated_at = @UpdatedAt
+            WHERE section_id IN @SectionIds
+            """;
+
+        using var connection = _connectionFactory.CreateConnection();
+        return await connection.ExecuteAsync(sql, new
+        {
+            SectionIds = sectionIds.ToArray(),
+            UpdatedAt = DateTime.Now
+        });
     }
 }

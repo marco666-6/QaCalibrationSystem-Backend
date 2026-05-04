@@ -9,6 +9,8 @@ public interface IPositionService
     Task<ApiResponse<IEnumerable<PositionOptionDto>>> GetOptionsAsync(PositionOptionFilterParams filters);
     Task<ApiResponse<PositionDto>> GetByIdAsync(int positionId);
     Task<ApiResponse<PositionDto>> CreateAsync(CreatePositionRequest request);
+    Task<ApiResponse<IReadOnlyCollection<PositionDto>>> CreateManyAsync(CreatePositionsRequest request);
     Task<ApiResponse<PositionDto>> UpdateAsync(int positionId, UpdatePositionRequest request);
     Task<ApiResponse> DeleteAsync(int positionId);
+    Task<ApiResponse<BulkDeleteResultDto>> DeleteManyAsync(BulkDeletePositionsRequest request);
 }

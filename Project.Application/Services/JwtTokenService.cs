@@ -33,10 +33,13 @@ public sealed class JwtTokenService : IJwtTokenService
         var claims = new[]
         {
             new Claim(JwtRegisteredClaimNames.Sub, user.UserId.ToString()),
+            new Claim(ClaimTypes.NameIdentifier, user.UserId.ToString()),
+            new Claim(ClaimTypes.Name, user.Username),
             new Claim(JwtRegisteredClaimNames.UniqueName, user.Username),
             new Claim(JwtRegisteredClaimNames.Email, user.Email),
             new Claim(ClaimTypes.Role, user.Role),
             new Claim("employee_id", user.EmployeeId?.ToString() ?? string.Empty),
+            new Claim("employee_code", user.Employee?.EmployeeCode ?? user.EmployeeCode ?? string.Empty),
             new Claim("mustChangePassword", user.MustChangePassword ? "true" : "false"),
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
         };

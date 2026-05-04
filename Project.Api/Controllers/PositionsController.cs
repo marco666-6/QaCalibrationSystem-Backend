@@ -65,6 +65,24 @@ public sealed class PositionsController : ControllerBase
             result);
     }
 
+    [HttpPost("multi-add")]
+    [ProducesResponseType(typeof(ApiResponse<IReadOnlyCollection<PositionDto>>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ApiResponse<IReadOnlyCollection<PositionDto>>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<IReadOnlyCollection<PositionDto>>), StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> CreateMany([FromBody] CreatePositionsRequest request)
+    {
+        var result = await _positionService.CreateManyAsync(request);
+        if (!result.Success)
+        {
+            if (result.Message.Contains("already in use", StringComparison.OrdinalIgnoreCase))
+                return Conflict(result);
+
+            return BadRequest(result);
+        }
+
+        return StatusCode(StatusCodes.Status201Created, result);
+    }
+
     [HttpPut("{id:int}")]
     [ProducesResponseType(typeof(ApiResponse<PositionDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<PositionDto>), StatusCodes.Status400BadRequest)]
@@ -93,5 +111,23 @@ public sealed class PositionsController : ControllerBase
     {
         var result = await _positionService.DeleteAsync(id);
         return result.Success ? Ok(result) : NotFound(result);
+    }
+
+    [HttpPost("bulk-delete")]
+    [ProducesResponseType(typeof(ApiResponse<BulkDeleteResultDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<BulkDeleteResultDto>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<BulkDeleteResultDto>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DeleteMany([FromBody] BulkDeletePositionsRequest request)
+    {
+        var result = await _positionService.DeleteManyAsync(request);
+        if (!result.Success)
+        {
+            if (result.Message.Contains("not found", StringComparison.OrdinalIgnoreCase))
+                return NotFound(result);
+
+            return BadRequest(result);
+        }
+
+        return Ok(result);
     }
 }

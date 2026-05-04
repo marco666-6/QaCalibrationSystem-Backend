@@ -12,11 +12,11 @@ GO
 -- ============================
 -- DROP (safe order)
 -- ============================
+/* IF OBJECT_ID('', 'U') IS NOT NULL DROP TABLE ;
 IF OBJECT_ID('', 'U') IS NOT NULL DROP TABLE ;
 IF OBJECT_ID('', 'U') IS NOT NULL DROP TABLE ;
 IF OBJECT_ID('', 'U') IS NOT NULL DROP TABLE ;
-IF OBJECT_ID('', 'U') IS NOT NULL DROP TABLE ;
-IF OBJECT_ID('', 'U') IS NOT NULL DROP TABLE ;
+IF OBJECT_ID('', 'U') IS NOT NULL DROP TABLE ;*/
 -- And so on for all tables, in the correct order to avoid FK constraint issues (drop child tables before parent tables)
 GO
 
@@ -141,7 +141,6 @@ CREATE TABLE dbo.equipments (
     CONSTRAINT CK_equipments_equipment_status CHECK (equipment_status IN ('A', 'O', 'S'))
 );
 GO
-
 
 -- =========================
 -- CALIBRATION APPROVERS

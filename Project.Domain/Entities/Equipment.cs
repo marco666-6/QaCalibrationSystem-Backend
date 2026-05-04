@@ -16,6 +16,8 @@ namespace Project.Domain.Entities
         public string? Model { get; set; }
         public string Location { get; set; } = string.Empty;
         public int SectionId { get; set; }
+        public string SectionCode { get; set; } = string.Empty;
+        public string SectionName { get; set; } = string.Empty;
         public int PicId { get; set; }
         public string PicCode { get; set; } = string.Empty;
         public string PicName { get; set; } = string.Empty;

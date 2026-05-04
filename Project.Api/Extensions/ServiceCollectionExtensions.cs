@@ -30,7 +30,8 @@ public static class ServiceCollectionExtensions
             typeof(PasswordResetToken),
             typeof(DefaultLocation),
             typeof(Section),
-            typeof(Position)
+            typeof(Position),
+            typeof(Equipment)
         );
 
         SqlMapper.AddTypeHandler(new DateOnlyTypeHandler());
@@ -41,6 +42,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IDefaultLocationRepository, DefaultLocationRepository>();
         services.AddScoped<ISectionRepository, SectionRepository>();
         services.AddScoped<IPositionRepository, PositionRepository>();
+        services.AddScoped<IEquipmentRepository, EquipmentRepository>();
         return services;
     }
 
@@ -52,6 +54,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IDefaultLocationService, DefaultLocationService>();
         services.AddScoped<ISectionService, SectionService>();
         services.AddScoped<IPositionService, PositionService>();
+        services.AddScoped<IEquipmentService, EquipmentService>();
         services.AddScoped<IJwtTokenService, JwtTokenService>();
         
         services.AddValidatorsFromAssemblyContaining<CreateUserRequestValidator>();

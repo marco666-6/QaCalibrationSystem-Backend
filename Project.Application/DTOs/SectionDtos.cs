@@ -55,10 +55,18 @@ public sealed record CreateSectionRequest(
     string SectionName
 );
 
+public sealed record CreateSectionsRequest(
+    IReadOnlyCollection<CreateSectionRequest> Items
+);
+
 public sealed record UpdateSectionRequest(
     string SectionCode,
     string SectionName,
     bool IsActive
+);
+
+public sealed record BulkDeleteSectionsRequest(
+    IReadOnlyCollection<int> Ids
 );
 
 public sealed class CreateSectionRequestValidator : AbstractValidator<CreateSectionRequest>
@@ -86,5 +94,33 @@ public sealed class UpdateSectionRequestValidator : AbstractValidator<UpdateSect
         RuleFor(x => x.SectionName)
             .NotEmpty().WithMessage("Section name is required.")
             .MaximumLength(100).WithMessage("Section name cannot exceed 100 characters.");
+    }
+}
+
+public sealed class CreateSectionsRequestValidator : AbstractValidator<CreateSectionsRequest>
+{
+    public CreateSectionsRequestValidator()
+    {
+        RuleFor(x => x.Items)
+            .NotNull().WithMessage("Items are required.")
+            .Must(items => items.Count > 0).WithMessage("At least one section is required.")
+            .Must(items => items.Count <= 100).WithMessage("A maximum of 100 sections can be submitted at once.");
+
+        RuleForEach(x => x.Items)
+            .SetValidator(new CreateSectionRequestValidator());
+    }
+}
+
+public sealed class BulkDeleteSectionsRequestValidator : AbstractValidator<BulkDeleteSectionsRequest>
+{
+    public BulkDeleteSectionsRequestValidator()
+    {
+        RuleFor(x => x.Ids)
+            .NotNull().WithMessage("IDs are required.")
+            .Must(ids => ids.Count > 0).WithMessage("At least one section ID is required.")
+            .Must(ids => ids.Count <= 500).WithMessage("A maximum of 500 section IDs can be deleted at once.");
+
+        RuleForEach(x => x.Ids)
+            .GreaterThan(0).WithMessage("Section ID must be greater than 0.");
     }
 }
