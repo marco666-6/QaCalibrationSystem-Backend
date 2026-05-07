@@ -26,7 +26,7 @@ try
         .AddInfrastructure()
         .AddApplication()
         .AddSwagger()
-        .AddEmailNotifications(builder.Configuration);
+        .AddEmailReminderNotifications(builder.Configuration);
 
     builder.Services.AddControllers();
 

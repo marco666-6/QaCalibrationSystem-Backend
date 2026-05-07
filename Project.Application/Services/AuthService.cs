@@ -20,7 +20,7 @@ public sealed class AuthService : IAuthService
     private readonly IValidator<ChangePasswordRequest> _passwordValidator;
     private readonly IValidator<ForgotPasswordRequest> _forgotPasswordValidator;
     private readonly IValidator<ResetPasswordWithTokenRequest> _resetPasswordValidator;
-    private readonly EmailNotificationSettings _notificationSettings;
+    private readonly EmailReminderNotificationSettings _notificationSettings;
     private readonly ILogger<AuthService> _logger;
 
     private const int MaxFailedAttempts = 5;
@@ -35,7 +35,7 @@ public sealed class AuthService : IAuthService
         IValidator<ChangePasswordRequest> passwordValidator,
         IValidator<ForgotPasswordRequest> forgotPasswordValidator,
         IValidator<ResetPasswordWithTokenRequest> resetPasswordValidator,
-        IOptions<EmailNotificationSettings> notificationSettings,
+        IOptions<EmailReminderNotificationSettings> notificationSettings,
         ILogger<AuthService> logger)
     {
         _userRepo = userRepo;

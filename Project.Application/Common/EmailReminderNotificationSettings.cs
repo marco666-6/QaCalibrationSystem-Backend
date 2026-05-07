@@ -1,8 +1,8 @@
 ﻿namespace Project.Application.Common;
 
-public sealed class EmailNotificationSettings
+public sealed class EmailReminderNotificationSettings
 {
-    public const string SectionName = "EmailNotifications";
+    public const string SectionName = "EmailReminderNotificationSettings";
     public bool Enabled { get; init; }
     public string SmtpHost { get; init; } = string.Empty;
     public int SmtpPort { get; init; } = 587;
