@@ -1,0 +1,775 @@
+// appsettings.json
+{
+  "Urls": "",
+  "ConnectionStrings": {
+    "DefaultConnection": "Server=SBIDB;Database=Calibration;User Id=sa;Password=Sbiis200@;Application Name=Calibration-Management-System;TrustServerCertificate=True;MultipleActiveResultSets=true"
+  },
+  "Settings": {
+    "Uploads": "E:\\AppData\\Calibration\\uploads",
+    "AppUrl": "http://calibration.sbi.sws.co.jp"
+  },
+  "Serilog": {
+    "MinimumLevel": {
+      "Default": "Debug",
+      "Override": {
+        "Microsoft": "Information",
+        "Microsoft.AspNetCore": "Information",
+        "System": "Information"
+      }
+    },
+    "WriteTo": [
+      {
+        "Name": "Console"
+      },
+      {
+        "Name": "File",
+        "Args": {
+          "path": "C:\\inetpub\\apis\\calibration-api\\logs\\calibration-.log",
+          "rollingInterval": "Day",
+          "retainedFileCountLimit": 30,
+          "outputTemplate": "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}"
+        }
+      }
+    ],
+    "Enrich": [ "FromLogContext" ]
+  },
+  "JwtSettings": {
+    "SecretKey": "",
+    "Issuer": "Calibration.Api",
+    "Audience": "Calibration.Client",
+    "ExpirationMinutes": 1
+  },
+  "EmailReminderNotifications": {
+    "Enabled": true,
+    "SmtpHost": "sbimailsys.sbi.sws.co.jp",
+    "SmtpPort": 25,
+    "UseSsl": false,
+    "SenderEmail": "sbi-calibration-system@sbi.sws.co.jp",
+    "SenderName": "Calibration Management System",
+    "Username": "",
+    "Password": ""
+  },
+  "EPPlus": {
+    "ExcelPackage": {
+      "LicenseContext": "Commercial"
+    }
+  },
+  "AllowedHosts": "*"
+}
+
+// appsettings.Development.json
+{
+  "Urls": "http://localhost:5005",
+  "ConnectionStrings": {
+    "DefaultConnection": "Server=localhost\\SQLEXPRESS;Database=Calibration;Integrated Security=True;TrustServerCertificate=True;MultipleActiveResultSets=True"
+    //"DefaultConnection": "Server=SBIDB;Database=CalibMS;User Id=sa;Password=Sbiis200@;Application Name=Calibration-Management-System;TrustServerCertificate=True;MultipleActiveResultSets=true"
+  },
+  "Settings": {
+    "Uploads": "D:\\CalibrationStorage\\uploads",
+    "AppUrl": "http://calibration.sbi.sws.co.jp"
+  },
+  "Serilog": {
+    "MinimumLevel": {
+      "Default": "Debug",
+      "Override": {
+        "Microsoft": "Information",
+        "Microsoft.AspNetCore": "Information",
+        "System": "Information"
+      }
+    }
+  },
+  "JwtSettings": {
+    "SecretKey": "Slkklk8SFDSFK4KJNnsdnam./2409KZDFLKSx88uw8434q3m,s!",
+    "Issuer": "Calibration.Api",
+    "Audience": "Calibration.Client",
+    "ExpirationMinutes": 1
+  },
+  "EmailReminderNotifications": {
+    "Enabled": true,
+    "SmtpHost": "sbimailsys.sbi.sws.co.jp",
+    "SmtpPort": 25,
+    "UseSsl": false,
+    "SenderEmail": "marcophilips73@gmail.com",
+    "SenderName": "Calibration Management System",
+    "Username": "",
+    "Password": ""
+  },
+  "EPPlus": {
+    "ExcelPackage": {
+      "LicenseContext": "Commercial"
+    }
+  },
+  "AllowedHosts": "*"
+}
+
+
+/////#####-----<!--?--!>-----#####\\\\\/////#####-----<!--?--!>-----#####\\\\\/////#####-----<!--?--!>-----#####\\\\\/////#####-----<!--?--!>-----#####\\\\\
+
+
+using System.Data;
+using System.Text;
+using Dapper;
+using FluentValidation;
+using Project.Application.Common;
+using Project.Application.DTOs;
+using Project.Application.Interfaces;
+using Project.Application.Services;
+using Project.Domain.Entities;
+using Project.Infrastructure.Data;
+using Project.Infrastructure.Mapping;
+using Project.Infrastructure.Repositories;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
+
+namespace Project.Api.Extensions;
+
+
+public static class ServiceCollectionExtensions
+{
+
+
+    public static IServiceCollection AddInfrastructure(
+        this IServiceCollection services)
+    {
+        DapperTypeMapRegistrar.Register(
+            typeof(Employee),
+            typeof(User),
+            typeof(PasswordResetToken)
+        );
+
+        SqlMapper.AddTypeHandler(new DateOnlyTypeHandler());
+        SqlMapper.AddTypeHandler(new TimeOnlyTypeHandler());
+
+        services.AddScoped<IDbConnectionFactory, DbConnectionFactory>();
+        services.AddScoped<IUserRepository, UserRepository>();
+        return services;
+    }
+
+    public static IServiceCollection AddApplication(
+        this IServiceCollection services)
+    {
+        services.AddScoped<IAuthService, AuthService>();
+        services.AddScoped<IUserService, UserService>();
+        services.AddScoped<IJwtTokenService, JwtTokenService>();
+        
+        services.AddValidatorsFromAssemblyContaining<CreateUserRequestValidator>();
+        return services;
+    }
+
+    public static IServiceCollection AddEmailReminderNotifications(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        return services;
+    }
+
+    public static IServiceCollection AddJwtAuthentication(
+        this IServiceCollection services, IConfiguration configuration)
+    {
+        var jwtSettings = configuration.GetSection(JwtSettings.SectionName).Get<JwtSettings>()
+            ?? throw new InvalidOperationException("JwtSettings section is missing from appsettings.json.");
+
+        services.Configure<JwtSettings>(configuration.GetSection(JwtSettings.SectionName));
+
+        services.AddAuthentication(options =>
+        {
+            options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+            options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+        })
+        .AddJwtBearer(options =>
+        {
+            options.TokenValidationParameters = new TokenValidationParameters
+            {
+                ValidateIssuer = true,
+                ValidateAudience = true,
+                ValidateLifetime = true,
+                ValidateIssuerSigningKey = true,
+                ValidIssuer = jwtSettings.Issuer,
+                ValidAudience = jwtSettings.Audience,
+                IssuerSigningKey = new SymmetricSecurityKey(
+                    Encoding.UTF8.GetBytes(jwtSettings.SecretKey)),
+                ClockSkew = TimeSpan.Zero
+            };
+        });
+
+        services.AddAuthorization();
+
+        return services;
+    }
+
+    public class DateOnlyTypeHandler : SqlMapper.TypeHandler<DateOnly>
+    {
+        public override void SetValue(IDbDataParameter parameter, DateOnly value)
+            => parameter.Value = value.ToDateTime(TimeOnly.MinValue);
+
+        public override DateOnly Parse(object value)
+            => DateOnly.FromDateTime((DateTime)value);
+    }
+
+
+    public sealed class TimeOnlyTypeHandler : SqlMapper.TypeHandler<TimeOnly>
+    {
+        public override void SetValue(IDbDataParameter parameter, TimeOnly value)
+        {
+            parameter.DbType = DbType.Time;
+            parameter.Value = value.ToTimeSpan();
+        }
+
+        public override TimeOnly Parse(object value)
+        {
+            if (value is TimeSpan timeSpan)
+                return TimeOnly.FromTimeSpan(timeSpan);
+
+            if (value is DateTime dateTime)
+                return TimeOnly.FromDateTime(dateTime);
+
+            throw new DataException($"Cannot convert {value.GetType()} to TimeOnly");
+        }
+    }
+
+    public static IServiceCollection AddSwagger(this IServiceCollection services)
+    {
+        services.AddEndpointsApiExplorer();
+        services.AddSwaggerGen(options =>
+        {
+            options.SwaggerDoc("v1", new OpenApiInfo
+            {
+                Title = "Calibration Management System API",
+                Version = "v1",
+                Description = "Calibration Management System REST API — .NET 9 + Dapper + SQL Server",
+                Contact = new OpenApiContact
+                {
+                    Name = "Calibration Team",
+                    Email = "calibration@team.com"
+                }
+            });
+
+            var xmlFile = $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml";
+            var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
+            if (File.Exists(xmlPath))
+                options.IncludeXmlComments(xmlPath);
+        });
+
+        return services;
+    }
+}
+
+
+/////#####-----<!--?--!>-----#####\\\\\/////#####-----<!--?--!>-----#####\\\\\/////#####-----<!--?--!>-----#####\\\\\/////#####-----<!--?--!>-----#####\\\\\
+
+
+using System.Diagnostics;
+using System.Runtime.InteropServices;
+using Microsoft.Extensions.FileProviders;
+using Project.Api.Extensions;
+using Project.Api.Middleware;
+using Project.Application.Services;
+using Serilog;
+
+
+Log.Logger = new LoggerConfiguration()
+    .WriteTo.Console()
+    .CreateBootstrapLogger();
+
+try
+{
+    Log.Information("Starting Calibration Web API...");
+
+    var builder = WebApplication.CreateBuilder(args);
+
+    builder.Host.UseSerilog((ctx, lc) => lc
+    .ReadFrom.Configuration(ctx.Configuration)
+    .Enrich.FromLogContext());
+
+
+    builder.Services
+        .AddInfrastructure()
+        .AddApplication()
+        .AddSwagger()
+        .AddEmailReminderNotifications(builder.Configuration);
+
+    builder.Services.AddControllers();
+
+    builder.Services.AddHealthChecks();
+
+
+    builder.Services.AddJwtAuthentication(builder.Configuration);
+
+
+
+    builder.Services.AddCors(options =>
+    {
+        options.AddPolicy("AllowAll", policy =>
+            policy.AllowAnyOrigin()
+                  .AllowAnyMethod()
+                  .AllowAnyHeader());
+    });
+
+
+    var app = builder.Build();
+
+
+    app.UseMiddleware<GlobalExceptionMiddleware>();
+
+    if (app.Environment.IsDevelopment())
+    {
+        app.UseSwagger();
+        app.UseSwaggerUI(c =>
+        {
+            c.SwaggerEndpoint("/swagger/v1/swagger.json", "Calibration API v1");
+            c.RoutePrefix = string.Empty;
+        });
+    }
+
+    app.UseHttpsRedirection();
+    var uploadsDirectory = Path.Combine(app.Environment.ContentRootPath, "uploads");
+    Directory.CreateDirectory(uploadsDirectory);
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = new PhysicalFileProvider(uploadsDirectory),
+        RequestPath = "/uploads"
+    });
+    app.UseAuthentication();
+    app.UseSerilogRequestLogging();
+    app.UseCors("AllowAll");
+    app.UseAuthorization();
+    app.MapControllers();
+    app.MapHealthChecks("/health");
+
+    if (app.Environment.IsDevelopment())
+    {
+        var url = builder.Configuration["Urls"]
+            ?? app.Urls.FirstOrDefault()
+            ?? "http://localhost:5033";
+
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(1500);
+            OpenBrowser(url);
+        });
+    }
+
+    await app.RunAsync();
+}
+catch (Exception ex) when (ex is not HostAbortedException)
+{
+    Log.Fatal(ex, "Application terminated unexpectedly.");
+}
+finally
+{
+    Log.CloseAndFlush();
+}
+
+
+static void OpenBrowser(string url)
+{
+    try
+    {
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            Process.Start(new ProcessStartInfo { FileName = url, UseShellExecute = true });
+        }
+        else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        {
+            Process.Start("open", url);
+        }
+        else
+        {
+            Process.Start("xdg-open", url);
+        }
+    }
+    catch (Exception ex)
+    {
+        Log.Warning(ex, "Could not auto-open browser at {Url}", url);
+    }
+}
+
+
+/////#####-----<!--?--!>-----#####\\\\\/////#####-----<!--?--!>-----#####\\\\\/////#####-----<!--?--!>-----#####\\\\\/////#####-----<!--?--!>-----#####\\\\\
+
+
+using Project.Application.Common;
+using Project.Application.DTOs;
+using Project.Application.Interfaces;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
+
+namespace Project.Api.Controllers;
+
+
+[ApiController]
+[Route("api/[controller]")]
+[Produces("application/json")]
+public sealed class AuthController : ControllerBase
+{
+    private readonly IAuthService _authService;
+    private readonly ILogger<AuthController> _logger;
+
+    public AuthController(
+        IAuthService authService,
+        ILogger<AuthController> logger)
+    {
+        _authService = authService;
+        _logger = logger;
+    }
+
+
+    [HttpPost("login")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(ApiResponse<LoginResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<LoginResponse>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<LoginResponse>), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> Login([FromBody] LoginRequest request)
+    {
+        var result = await _authService.LoginAsync(request);
+
+        if (!result.Success)
+        {
+            return Unauthorized(result);
+        }
+
+        return Ok(result);
+    }
+
+    [HttpPost("register")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(ApiResponse<LoginResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<LoginResponse>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<LoginResponse>), StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Register([FromBody] RegisterRequest request)
+    {
+        var result = await _authService.RegisterAsync(request);
+
+        if (!result.Success)
+        {
+            if (result.Message.Contains("already", StringComparison.OrdinalIgnoreCase))
+                return Conflict(result);
+
+            return BadRequest(result);
+        }
+
+        return Ok(result);
+    }
+
+    [HttpGet("employee-by-code/{code}")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(ApiResponse<EmployeeByCodeDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<EmployeeByCodeDto>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<EmployeeByCodeDto>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetEmployeeByCode([FromRoute] string code)
+    {
+        var result = await _authService.GetEmployeeByCodeAsync(code);
+        if (!result.Success)
+        {
+            if (result.Message.Contains("not found", StringComparison.OrdinalIgnoreCase))
+                return NotFound(result);
+
+            return BadRequest(result);
+        }
+
+        return Ok(result);
+    }
+
+    [HttpPost("forgot-password")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(ApiResponse<ForgotPasswordResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<ForgotPasswordResponse>), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request)
+    {
+        var result = await _authService.ForgotPasswordAsync(request);
+        return result.Success ? Ok(result) : BadRequest(result);
+    }
+
+    [HttpPost("reset-password")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordWithTokenRequest request)
+    {
+        var result = await _authService.ResetPasswordAsync(request);
+        return result.Success ? Ok(result) : BadRequest(result);
+    }
+
+
+    [HttpPost("change-password")]
+    [Authorize]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
+    {
+
+        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out var userId))
+            return Unauthorized(ApiResponse.Fail("Invalid token."));
+
+        var result = await _authService.ChangePasswordAsync(userId, request);
+
+        return result.Success ? Ok(result) : BadRequest(result);
+    }
+
+
+    [HttpPost("refresh")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(ApiResponse<RefreshTokenResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<RefreshTokenResponse>), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenRequest request)
+    {
+        var result = await _authService.RefreshTokenAsync(request);
+
+        if (!result.Success)
+        {
+            return Unauthorized(result);
+        }
+
+        return Ok(result);
+    }
+}
+
+
+using Project.Application.Common;
+using Project.Application.DTOs;
+using Project.Application.Interfaces;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+
+namespace Project.Api.Controllers;
+
+
+[ApiController]
+[Route("api/[controller]")]
+[Produces("application/json")]
+[Authorize(Roles = "SuperAdmin,Admin")]
+public sealed class UsersController : ControllerBase
+{
+    private readonly IUserService _userService;
+    private readonly ILogger<UsersController> _logger;
+
+    public UsersController(
+        IUserService userService,
+        ILogger<UsersController> logger)
+    {
+        _userService = userService;
+        _logger = logger;
+    }
+
+
+    [HttpGet]
+    [ProducesResponseType(typeof(ApiResponse<PagedResult<UserSummaryDto>>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetAll([FromQuery] UserFilterParams filters)
+    {
+        var result = await _userService.GetAllAsync(filters);
+        return Ok(result);
+    }
+
+    [AllowAnonymous]
+    [HttpGet("options")]
+    [ProducesResponseType(typeof(ApiResponse<IEnumerable<UserOptionDto>>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetOptions([FromQuery] UserOptionFilterParams filters)
+    {
+        var result = await _userService.GetOptionsAsync(filters);
+        return Ok(result);
+    }
+
+
+    [HttpGet("{id:int}")]
+    [ProducesResponseType(typeof(ApiResponse<UserDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<UserDto>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetById(int id)
+    {
+        var result = await _userService.GetByIdAsync(id);
+        return result.Success ? Ok(result) : NotFound(result);
+    }
+
+    [AllowAnonymous]
+    [HttpPost]
+    [ProducesResponseType(typeof(ApiResponse<UserDto>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ApiResponse<UserDto>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<UserDto>), StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Create([FromBody] CreateUserRequest request)
+    {
+        var result = await _userService.CreateAsync(request);
+
+        if (!result.Success)
+        {
+            if (result.Message.Contains("already in use") ||
+                result.Message.Contains("already registered"))
+                return Conflict(result);
+
+            return BadRequest(result);
+        }
+
+        return CreatedAtAction(
+            nameof(GetById),
+            new { id = result.Data!.UserId },
+            result);
+    }
+
+
+
+    [HttpPut("{id:int}")]
+    [ProducesResponseType(typeof(ApiResponse<UserDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<UserDto>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<UserDto>), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ApiResponse<UserDto>), StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Update(int id, [FromBody] UpdateUserRequest request)
+    {
+        var result = await _userService.UpdateAsync(id, request);
+
+        if (!result.Success)
+        {
+            if (result.Message.Contains("not found")) return NotFound(result);
+            if (result.Message.Contains("already in use") ||
+                result.Message.Contains("already registered")) return Conflict(result);
+            return BadRequest(result);
+        }
+
+        return Ok(result);
+    }
+
+
+    [HttpPost("{id:int}/reset-password")]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ResetPassword(int id, [FromBody] ResetPasswordRequest request)
+    {
+        var result = await _userService.ResetPasswordAsync(id, request);
+
+        return result.Success
+            ? Ok(result)
+            : result.Message.Contains("not found") ? NotFound(result) : BadRequest(result);
+    }
+
+
+    [HttpDelete("{id:int}")]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Delete(int id)
+    {
+        var result = await _userService.DeleteAsync(id);
+        return result.Success ? Ok(result) : NotFound(result);
+    }
+}
+
+
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Project.Application.Common;
+using Project.Application.DTOs;
+using Project.Application.Interfaces;
+
+namespace Project.Api.Controllers;
+
+[ApiController]
+[Route("api/Users/me")]
+[Produces("application/json")]
+[Authorize]
+public sealed class ProfileController : ControllerBase
+{
+    private readonly IUserService _userService;
+
+    public ProfileController(IUserService userService)
+    {
+        _userService = userService;
+    }
+
+    [HttpGet]
+    [ProducesResponseType(typeof(ApiResponse<MyProfileDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<MyProfileDto>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<MyProfileDto>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Get()
+    {
+        if (!TryGetUserId(out var userId))
+            return Unauthorized(ApiResponse.Fail("Invalid token."));
+
+        var result = await _userService.GetMyProfileAsync(userId);
+        return result.Success ? Ok(result) : NotFound(result);
+    }
+
+    [HttpPut]
+    [ProducesResponseType(typeof(ApiResponse<MyProfileDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<MyProfileDto>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<MyProfileDto>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<MyProfileDto>), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ApiResponse<MyProfileDto>), StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Update([FromBody] UpdateMyProfileRequest request)
+    {
+        if (!TryGetUserId(out var userId))
+            return Unauthorized(ApiResponse.Fail("Invalid token."));
+
+        var result = await _userService.UpdateMyProfileAsync(userId, request);
+        if (!result.Success)
+        {
+            if (result.Message.Contains("not found", StringComparison.OrdinalIgnoreCase))
+                return NotFound(result);
+            if (result.Message.Contains("already", StringComparison.OrdinalIgnoreCase))
+                return Conflict(result);
+            return BadRequest(result);
+        }
+
+        return Ok(result);
+    }
+
+    private bool TryGetUserId(out int userId)
+    {
+        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        return int.TryParse(userIdClaim, out userId);
+    }
+}
+
+
+/////#####-----<!--?--!>-----#####\\\\\/////#####-----<!--?--!>-----#####\\\\\/////#####-----<!--?--!>-----#####\\\\\/////#####-----<!--?--!>-----#####\\\\\
+
+
+{
+  "profiles": {
+    "http": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "dotnetRunMessages": true,
+      "launchBrowser": false,
+      "applicationUrl": "http://localhost:5005"
+    },
+    "https": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "dotnetRunMessages": true,
+      "launchBrowser": false,
+      "applicationUrl": "https://localhost:7102;http://localhost:5005"
+    },
+    "IIS Express": {
+      "commandName": "IISExpress",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "dotnetRunMessages": true,
+      "launchBrowser": false
+    },
+    "QaCalibrationSystem": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "dotnetRunMessages": true,
+      "launchBrowser": false,
+      "applicationUrl": "http://localhost:5005"
+    }
+  },
+  "$schema": "https://json.schemastore.org/launchsettings.json",
+  "iisSettings": {
+    "windowsAuthentication": false,
+    "anonymousAuthentication": true,
+    "iisExpress": {
+      "applicationUrl": "http://localhost:65149/",
+      "sslPort": 44377
+    }
+  }
+}

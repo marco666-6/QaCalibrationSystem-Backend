@@ -1,0 +1,136 @@
+### All user-role 'Admin' can manage:
+- Default locations master
+- Calib-roles master
+- Externals master
+- Equipments master
+- Sections' & section-pics' emails master
+- Listed below calibration workflows
+
+### All user-role 'User' can manage:
+- Default locations master
+- Equipments master
+- Listed below calibration workflows
+
+---
+
+### Master Data Management (both roles unless noted)
+
+**Default Locations**
+- Add, edit, activate/deactivate, delete
+- Export, import (with downloadable import template)
+
+**Section Emails** (Admin only)
+- Add, edit, activate/deactivate, delete
+- Export, import (with downloadable import template)
+
+**Section PICs Emails** (Admin only)
+- Add, edit, activate/deactivate, delete
+- Export, import (with downloadable import template)
+
+**Calib-roles** (Admin only)
+- Add, edit, activate/deactivate, show, delete
+- Export, import (with downloadable import template)
+
+**Externals** (Admin only)
+- Add, edit, activate/deactivate, show, delete
+- Export, import (with downloadable import template)
+
+**Equipments**
+- Add, edit, show, delete
+- Bulk delete, bulk status change, bulk section/department change, bulk location change, bulk remarks change
+- Schedules export, export, import (with downloadable import template)
+- QR Code for each equipment
+
+---
+
+### Calibration Workflows (Admin & User)
+
+Both Internal and External calibrations follow similar workflows, with key differences in resource assignment and execution details as described below.
+
+#### Calibration Plan
+
+**Common behaviour**
+- Create a new calibration plan for a selected month‑year period (monthly activity; skipping a month is allowed).
+- Set plan title.
+- Choose calibration type per equipment or globally for the plan: **Internal** (performed by QA calibration team) or **External** (performed by an external company).
+- Assign three approval roles for the plan: **Preparer**, **Checker**, **Approver**.
+- Review the list of measurement equipment due for calibration in the chosen month‑year (includes overdue equipment).
+  - All due equipment is checked by default; user can **uncheck** items to exclude them from the plan.
+- Save the plan as a draft or submit for approval.
+- Plan approval workflow:
+  - Sequential approval: Preparer → Checker → Approver.
+  - Each approver can approve (no reject).
+  - An approver can **cancel** their own approval as long as the next step has not yet approved. The last step (Approver) has a **1‑day cancellation window** before it locks permanently.
+  - When cancelling an approval, an optional remark may be added.
+- Once fully approved:
+  - Can lock the plan to prevent any further changes (optional, but recommended after approval).
+  - Or the system automatically **locks the plan** after the 1‑day cancellation window of the Approver step expires.
+  - Once locked:
+    - The system generates the **Plan Report PDF** (permanent, downloadable at any time).
+    - The system automatically creates the corresponding **Actual Calibration** process, pre‑populated with the approved equipment list and settings.
+    - Once fully approved and locked, all data in the plan becomes read‑only.
+- Before full approval & before locked, a **preview** of the final plan report PDF is available (without a permanent file).
+
+**Differences based on calibration type**
+
+- **If Internal (any equipment or globally):**
+  - Select calibration technicians (minimum 2, maximum 5).
+  - Assign a **PIC** (person in charge) from the selected technicians.
+  
+- **If External (any equipment or globally):**
+  - Instead of technicians and PIC, select one or more **External Companies** from the Externals master (minimum 1, maximum 5).
+  - No internal technician or PIC assignment is needed; the external company(ies) will handle the calibration execution.
+
+#### Calibration Actual (execution)
+
+**Common behaviour**
+- Actual process is automatically created from an approved plan and is ready for execution.
+- For equipments with the same equipment_name group, define the **Standard Calibration** performed.
+- For each equipment record the calibration **result**: **OK** or **NG**.
+- If NG, select an action: **Repair**, **Replacement**, or **None**. NG equipment automatically gets an **Out of Service** status update.
+- When a result is recorded for an equipment, the system automatically updates the equipment's **last calibration date** and automatically calculates the **next due date** based on the defined calibration interval.
+  - When needed to change or update the equipment's result after recording, user can simply edit the result and the system will update the dates accordingly.
+  - Can also choose none again to remove the result and reset the dates.
+- Actual approval workflow (same three roles assigned in the plan: Preparer, Checker, Approver).
+  - Same sequential approval, cancellation rules, and 1‑day lock on Approver step.
+- Closing the actual:
+  - After full approval, the actual can be manually closed to finalize the process. Closing is optional but recommended to prevent any further changes and to generate the final report.
+  - Manual close: user can close the actual process typically one week before month‑end, regardless of how many equipments have been calibrated (results recorded) or not calibrated yet, and regardless of the progress.
+  - Automatic close: at the end of the month, the system automatically closes any open actual process. Same 'doesnt matter' rules apply as manual close. 
+    - If automatically closed but no approval yet, the system will generate the final report with a clear "Unapproved" watermark on the PDF to indicate it was auto‑closed without approval.
+    - It can still be approved after auto‑close, but the "Unapproved" watermark will remain on the PDF until it gets fully approved. Once fully approved, the system will generate a new PDF without the watermark and replace the previous one.
+- Once closed **and** fully approved:
+  - The system generates the **Actual Report PDF** (permanent, downloadable at any time).
+  - All data in the actual becomes read‑only.
+- Before closed and before final approval, a **preview** of the final actual report PDF is available (without a permanent file).
+
+**Differences based on calibration type**
+
+- **Internal calibrations**  
+  - The actual process references the assigned internal technicians and PIC.  
+  - Reports indicate the internal team that performed the calibration.
+
+- **External calibrations**  
+  - All references to internal technicians or PIC are replaced by the selected **External Company**(ies).  
+  - The actual report shows the external company as the calibrating entity.  
+  - No internal technician assignments are required or recorded during execution; the external company carries out the work.
+
+#### General Calibration Rules & Notes
+
+- Equipment calibration intervals are configurable in months; the system calculates due dates accordingly.
+- A plan review screen automatically shows all items due (but also including overdue) for the chosen month.
+- Past / made (locked/closed/fully-approved/other-final) plans and actuals are **immutable** – all historical calibration data and reports are preserved exactly as originally approved.
+
+---
+
+### Follow‑up & Maintenance (Out of Service / Repair / Scrap)
+
+- **Out of Service Management**  
+  - View and filter all equipment currently at Out of Service status (due to NG results).  
+  - Track repair/replacement actions: log repair details, assign responsibility, set expected return date, and record final resolution.  
+  - When repaired/replaced, the equipment status can be manually changed back to Active, and the repair record is saved.
+
+- **Scrap Item Management** (soft‑delete / trash)  
+  - Equipment marked for deletion moves to a scrap/trash bin instead of being permanently deleted.  
+  - All history related to scrapped equipment remains intact; the equipment is simply flagged as inactive/scrapped.
+  - Users can review, restore, or permanently delete items from the scrap bin (admin only for permanent deletion).

@@ -1,0 +1,75 @@
+namespace Project.Domain.Entities;
+
+public class User
+{
+    public int UserId { get; set; }
+    public string? EmployeeCode { get; set; }
+    public int? EmployeeId { get; set; }
+    public string Username { get; set; } = string.Empty;
+    public string PasswordHash { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public string Role { get; set; } = "User";
+    public bool IsActive { get; set; } = true;
+    public DateTime? LastLogin { get; set; }
+    public int FailedLoginAttempts { get; set; } = 0;
+    public DateTime? LockoutUntil { get; set; }
+    public bool MustChangePassword { get; set; } = true;
+    public string? RefreshToken { get; set; }
+    public DateTime? RefreshTokenExpiresAt { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.Now;
+    public DateTime? UpdatedAt { get; set; }
+    public Employee? Employee { get; set; }
+    public bool IsLockedOut => LockoutUntil.HasValue && LockoutUntil.Value > DateTime.Now;
+}
+
+namespace Project.Domain.Entities;
+
+public sealed class PasswordResetToken
+{
+    public long Id { get; set; }
+    public int UserId { get; set; }
+    public string Token { get; set; } = string.Empty;
+    public DateTime ExpiresAt { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.Now;
+    public DateTime? ConsumedAt { get; set; }
+}
+
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace Project.Domain.Entities
+{
+
+    public class Employee
+    {
+        public int EmployeeId { get; set; }
+        public string EmployeeCode { get; set; } = string.Empty;
+        public string FullName { get; set; } = string.Empty;
+        public string FirstName { get; set; } = string.Empty;
+        public string LastName { get; set; } = string.Empty;
+        public string? MiddleName { get; set; }
+        public string Email { get; set; } = string.Empty;
+        public string? Phone { get; set; }
+        public DateTime? DateOfBirth { get; set; }
+        public string? Gender { get; set; }
+
+    }
+}
+
+
+/////#####-----<!--?--!>-----#####\\\\\/////#####-----<!--?--!>-----#####\\\\\/////#####-----<!--?--!>-----#####\\\\\/////#####-----<!--?--!>-----#####\\\\\
+
+
+namespace Project.Domain.Enums;
+
+public static class EnumsExample
+{
+    public const string Active = "active";
+    public const string Archived = "archived";
+    public const string Completed = "completed";
+
+    public static readonly string[] All = [Active, Archived, Completed];
+}
